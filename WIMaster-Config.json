@@ -1,0 +1,16 @@
+{
+  "Network": {
+    "EnableNetworkBackup": false,
+    "NetworkPath": "\\\\backup\\NetBackup",
+    "NetworkUser": "joe",
+    "NetworkPassword": ""
+  },
+  "Backup": {
+    "DefaultShutdown": false,
+    "DefaultNoWindowsold": false
+  },
+  "Advanced": {
+    "LogLevel": 3,
+    "ScratchDirThresholdGB": 20
+  }
+}

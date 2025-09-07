@@ -1,0 +1,5 @@
+[autorun]
+open=menu.cmd
+icon=WIMaster\WIMaster_Ico.ico
+label=Windows Setup & SMB Restore
+action=Start Windows Setup Menu

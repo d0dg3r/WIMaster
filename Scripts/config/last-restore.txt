@@ -1,0 +1,10 @@
+# Letzte Restore-Einstellungen
+# Diese Datei wird automatisch beim Speichern der Konfiguration erstellt
+
+SMB_SERVER=
+SMB_SHARE=
+SMB_USER=
+SMB_PASS=
+WIM_FILE=
+WIM_INDEX=1
+DISK_NUM=0

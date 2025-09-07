@@ -1,0 +1,303 @@
+{\rtf1\ansi\deff0 {\fonttbl {\f0 Times New Roman;}}
+{\colortbl;\red0\green0\blue0;\red0\green0\blue255;\red255\green0\blue0;}
+
+\f0\fs24
+{\b\fs28 WIMaster - Windows System Backup Tool\par}
+{\b\fs20 =====================================\par}
+\par
+Ein PowerShell-Skript zur Erstellung von Windows Image (WIM) Backups mit\par
+Netzwerk-Speicher-Support und unbeaufsichtigten Betriebsmöglichkeiten.\par
+\par
+Entwickelt von Joachim Mild <joe@devops-geek.net>\par
+Basierend auf c't-WIMaster von Axel Vahldiek\par
+\par
+{\b\fs24 FUNKTIONEN\par}
+{\b\fs20 ==========\par}
+\par
+- Windows System-Backup: Erstellt WIM-Images von Windows-Installationen\par
+- Netzwerk-Speicher: Speichert Backups direkt an Netzwerk-Standorten\par
+- Standard-Backup-Pfad: Konfigurierbarer Standard-Speicherort für Backups\par
+- Interaktive und unbeaufsichtigte Nutzung: GUI und Konsolenmodus\par
+- Kompakte GUI: Integrierte Optionen und Speicherort-Auswahl in einem Dialog; Info-Button öffnet Details\par
+- Laufwerksauswahl: Zeigt feste und Wechseldatenträger; Systemlaufwerk C: ist ausgeblendet/nicht wählbar\par
+- Cloud-Datei-Behandlung: Lädt automatisch Cloud-Platzhalter-Dateien herunter\par
+- Maschinenspezifische Benennung: Enthält Computername und Zeitstempel in Backup-Dateinamen\par
+- Fortschrittsüberwachung: Echtzeit-Anzeige des Backup-Fortschritts\par
+- Fehlerbehandlung: Umfassende Fehlerprüfung und -berichterstattung\par
+\par
+{\b\fs24 ANFORDERUNGEN\par}
+{\b\fs20 =============\par}
+\par
+- Windows 10/11 Version 20H2 (Build 19042) oder neuer\par
+- 64-Bit Windows mit x64-Prozessor\par
+- Administrator-Berechtigungen\par
+- PowerShell 3.0 oder neuer\par
+- Netzwerkzugriff zum Backup-Standort (für Netzwerk-Speicher-Funktion)\par
+\par
+{\b\fs24 INSTALLATION\par}
+{\b\fs20 =============\par}
+\par
+1. Laden Sie die WIMaster-Dateien auf Ihr System herunter\par
+2. Stellen Sie sicher, dass alle erforderlichen Dateien vorhanden sind:\par
+   - WIMaster.ps1 (Hauptskript)\par
+   - WIMaster_ConfigManager.ps1 (Konfigurations-Manager)\par
+   - WIMaster_Exclusions.json (Ausschlusslisten-Konfiguration)\par
+   - WIMaster_Ico.ico (Icon-Datei)\par
+   - vshadow.exe (Volume Shadow Copy Utility)\par
+   - ei.cfg (Windows Setup-Konfiguration)\par
+\par
+{\b\fs24 WIMAGE-SETUP\par}
+{\b\fs20 =============\par}
+\par
+Das WIMaster-Setup-Skript (WIMaster-Setup.ps1) erstellt einen bootfähigen USB-Stick\par
+mit WIMaster für die Systemwiederherstellung:\par
+\par
+{\b FUNKTIONEN DES SETUP-SKRIPTS:}\par
+- Erstellt bootfähigen USB-Stick mit Windows PE\par
+- Kopiert alle WIMaster-Dateien auf den USB-Stick\par
+- Konfiguriert automatisch die Boot-Umgebung\par
+- Unterstützt Windows 10/11 ISO-Images\par
+\par
+{\b VORBEREITUNG FÜR DAS SETUP:}\par
+1. USB-Stick mit mindestens 28 GB Speicherplatz\par
+2. Windows 10/11 ISO-Datei (empfohlen: Windows 10 Version 2004 Enterprise Eval)\par
+3. Administrator-Berechtigungen\par
+\par
+{\b SETUP AUSFÜHREN:}\par
+1. Rechtsklick auf "WIMaster-Setup.ps1" → "Als Administrator ausführen"\par
+2. USB-Datenträger aus der Liste auswählen\par
+3. Windows ISO-Datei auswählen (über "Durchsuchen" Button)\par
+4. "Weiter" klicken und Bestätigung abgeben\par
+5. Warten bis der Setup-Prozess abgeschlossen ist\par
+\par
+{\b\cf3 WARNUNG: Der ausgewählte USB-Stick wird komplett gelöscht!}\par
+\par
+{\b SETUP-PROZESS:}\par
+1. ISO-Image wird eingebunden\par
+2. USB-Stick wird partitioniert (WIM-BOOT: FAT32, WIM-DATA: NTFS)\par
+3. Boot-Dateien werden kopiert\par
+4. Windows PE wird installiert\par
+5. WIMaster-Dateien werden kopiert\par
+6. Setup.exe wird installiert\par
+\par
+{\b\fs24 KONFIGURATION\par}
+{\b\fs20 =============\par}
+\par
+{\b KONFIGURATIONS-MANAGER}\par
+Das WIMaster enthält ein separates Konfigurations-Manager-Skript für die sichere Einrichtung:\par
+\par
+Konfigurations-Manager ausführen:\par
+{\cf2 powershell -ExecutionPolicy Bypass -File WIMaster_ConfigManager.ps1}\par
+\par
+Der Konfigurations-Manager bietet:\par
+- Sichere Passwort-Speicherung: Passwörter werden mit Windows DPAPI verschlüsselt\par
+- Interaktive Einrichtung: Benutzerfreundliches Menü-System für die Konfiguration\par
+- Netzwerk-Tests: Eingebaute Netzwerkverbindungs-Tests mit temporären Mounts\par
+- Standard-Backup-Pfad: Konfiguration eines Standard-Speicherorts\par
+- Konfigurations-Backup: Anzeigen und Zurücksetzen von Konfigurationseinstellungen\par
+\par
+{\b KONFIGURATIONSDATEI}\par
+Einstellungen werden in WIMaster_Config.json gespeichert:\par
+\par
+{\cf2 \{\par
+  "Network": \{\par
+    "EnableNetworkBackup": true,\par
+    "NetworkPath": "\\\\\\\\backup\\\\NetBackup",\par
+    "NetworkUser": "joe",\par
+    "NetworkPassword": "[VERSCHLÜSSELT]"\par
+  \},\par
+  "Backup": \{\par
+    "DefaultShutdown": false,\par
+    "DefaultNoWindowsold": false,\par
+    "DefaultBackupPath": "G:"\par
+  \},\par
+  "Advanced": \{\par
+    "LogLevel": 3,\par
+    "ScratchDirThresholdGB": 20\par
+  \}\par
+\}}\par
+\par
+{\b BACKUP-OPTIONEN}\par
+Das Skript unterstützt zwei Modi:\par
+\par
+{\b INTERAKTIVER MODUS (Standard):}\par
+- Kompakter Startdialog mit integrierten Optionen und Speicherort-Auswahl\par
+- Optionen: „Herunterfahren nach Sicherung", „Windows.old nicht mitsichern"\par
+- Info-Button (About) mit Logo und Projekthinweisen\par
+- Laufwerksliste mit Spalten „Laufwerk", „Name", „Typ", „Freier Speicher" (C: ausgeblendet)\par
+- Fortschritt in einem grafischen Fenster\par
+\par
+{\b UNBEAUFSICHTIGTER MODUS:}\par
+- Läuft vollständig in der Konsole\par
+- Verwendet Standardeinstellungen und Standard-Backup-Pfad\par
+- Perfekt für automatisierte Backups und geplante Aufgaben\par
+\par
+{\b\fs24 VERWENDUNG\par}
+{\b\fs20 ==========\par}
+\par
+{\b KONFIGURATION EINRICHTEN}\par
+Vor der ersten Verwendung konfigurieren Sie Ihre Einstellungen:\par
+\par
+Konfigurations-Manager ausführen:\par
+{\cf2 powershell -ExecutionPolicy Bypass -File WIMaster_ConfigManager.ps1}\par
+\par
+Konfigurationsoptionen:\par
+1. Konfiguration anzeigen\par
+2. Netzwerk-Share konfigurieren\par
+3. Backup-Optionen konfigurieren\par
+4. Standard-Backup-Pfad konfigurieren\par
+5. Standard-Backup-Pfad testen\par
+6. Verbindung testen\par
+7. Zurücksetzen\par
+8. Beenden\par
+\par
+{\b INTERAKTIVER MODUS:}\par
+Mit GUI-Oberfläche ausführen:\par
+{\cf2 powershell -ExecutionPolicy Bypass -File WIMaster.ps1}\par
+\par
+{\b UNBEAUFSICHTIGTER MODUS:}\par
+Ohne Benutzerinteraktion ausführen:\par
+{\cf2 powershell -ExecutionPolicy Bypass -File WIMaster.ps1 -Unattended}\par
+\par
+{\b GEPLANTE AUFGABE BEISPIEL:}\par
+Erstellen Sie eine Windows-geplante Aufgabe für automatische Backups:\par
+\par
+Beispiel für Task Scheduler-Befehl:\par
+{\cf2 schtasks /create /tn "WIMaster Backup" /tr "powershell -ExecutionPolicy Bypass -File C:\\pfad\\zu\\WIMaster.ps1 -Unattended" /sc daily /st 02:00 /ru SYSTEM}\par
+\par
+{\b\fs24 BACKUP-PROZESS\par}
+{\b\fs20 ===============\par}
+\par
+1. System-Check: Überprüft Windows-Version und Anforderungen\par
+2. Cloud-Datei-Check: Lädt Cloud-Platzhalter-Dateien herunter\par
+3. Backup-Pfad-Auswahl: Verwendet Standard-Pfad oder zeigt Auswahl-Dialog\par
+4. Netzwerkverbindung: Testet und verbindet mit Backup-Standort (falls erforderlich)\par
+5. Schattenkopie: Erstellt Volume Shadow Copy für konsistentes Backup\par
+6. WIM-Erstellung: Verwendet DISM zur Erstellung des Windows-Images\par
+7. Verifizierung: Validiert Backup-Integrität\par
+8. Aufräumen: Entfernt temporäre Dateien und Schattenkopien\par
+\par
+{\b\fs24 AUSGABEDATEIEN\par}
+{\b\fs20 ===============\par}
+\par
+Backups werden mit beschreibenden Dateinamen gespeichert:\par
+- Install.wim: Install_[ComputerName]_[YYYY-MM-DD_HH-MM].wim\par
+- Fresh.wim: Fresh_[ComputerName]_[YYYY-MM-DD_HH-MM].wim\par
+\par
+Beispiel: Install_DESKTOP-ABC123_2024-01-15_14-30.wim\par
+\par
+{\b\fs24 NETZWERK-SPEICHER\par}
+{\b\fs20 =================\par}
+\par
+Das Skript unterstützt das Speichern von Backups an Netzwerk-Standorten:\par
+- UNC-Pfade: \\\\server\\share\\backup\par
+- Authentifizierung: Benutzername/Passwort-Authentifizierung\par
+- Laufwerk-Auswahl: Netzwerk-Pfade erscheinen im Laufwerk-Auswahl-Dialog\par
+- Automatisches Mapping: Temporäres Laufwerk-Mapping für UNC-Pfade, die Authentifizierung erfordern\par
+- Fehlerbehandlung: Automatische Wiederholung und Fehlerberichterstattung\par
+- Aufräumen: Automatische Bereinigung temporärer Netzwerk-Mappings\par
+\par
+{\b\fs24 STANDARD-BACKUP-PFAD\par}
+{\b\fs20 =====================\par}
+\par
+Das System unterstützt die Konfiguration eines Standard-Backup-Pfads:\par
+- Automatische Auswahl: Der Standard-Pfad wird automatisch in der Laufwerk-Auswahl markiert\par
+- Unbeaufsichtigter Modus: Verwendet automatisch den konfigurierten Standard-Pfad\par
+- Fallback-Verhalten: Falls der Standard-Pfad nicht verfügbar ist, kann ein anderer Pfad gewählt werden\par
+- Validierung: Testet die Erreichbarkeit des Standard-Pfads mit temporären Mounts\par
+\par
+{\b\fs24 FEHLERBEHEBUNG\par}
+{\b\fs20 ===============\par}
+\par
+{\b HÄUFIGE PROBLEME:}\par
+\par
+1. "Execution Policy" Fehler\par
+   {\cf2 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser}\par
+\par
+2. Netzwerkzugriff verweigert\par
+   - Verwenden Sie den Konfigurations-Manager zum Testen der Netzwerkverbindung\par
+   - Überprüfen Sie, ob der Netzwerk-Pfad erreichbar ist\par
+   - Überprüfen Sie Benutzername und Passwort in der Konfigurationsdatei\par
+   - Stellen Sie sicher, dass die Netzwerkverbindung verfügbar ist\par
+   - Das System testet Netzwerkpfade mit temporären Mounts\par
+\par
+3. Konfigurationsprobleme\par
+   - Führen Sie WIMaster_ConfigManager.ps1 aus, um aktuelle Einstellungen anzuzeigen\par
+   - Verwenden Sie den Konfigurations-Manager zum Zurücksetzen der Einstellungen bei Bedarf\par
+   - Stellen Sie sicher, dass die Konfigurationsdatei nicht beschädigt ist\par
+\par
+4. Unzureichender Speicherplatz\par
+   - Freigeben Sie Speicherplatz auf dem Systemlaufwerk\par
+   - Überprüfen Sie verfügbaren Speicherplatz am Backup-Standort\par
+\par
+5. Cloud-Dateien werden nicht heruntergeladen\par
+   - Überprüfen Sie die Internetverbindung\par
+   - Überprüfen Sie den Status des Cloud-Dienstes\par
+   - Stellen Sie sicher, dass Cloud-Dateien nicht synchronisiert werden\par
+\par
+6. Standard-Backup-Pfad nicht erreichbar\par
+   - Verwenden Sie Option 5 im Konfigurations-Manager zum Testen\par
+   - Überprüfen Sie, ob das Laufwerk verfügbar ist\par
+   - Konfigurieren Sie einen anderen Standard-Pfad falls erforderlich\par
+\par
+{\b PROTOKOLLDATEIEN}\par
+Das Skript erstellt mehrere Protokolldateien für die Fehlerbehebung:\par
+- WIMaster_Log_DISM.txt - DISM-Betriebsprotokolle\par
+- WIMaster_Log_RE_Enable.txt - Windows RE Aktivierungsprotokolle\par
+- WIMaster_Log_RE_Disable.txt - Windows RE Deaktivierungsprotokolle\par
+- WIMaster_Backupliste.txt - Backup-Image-Informationen\par
+\par
+{\b\fs24 ERWEITERTE KONFIGURATION\par}
+{\b\fs20 =========================\par}
+\par
+{\b BENUTZERDEFINIERTE BACKUP-OPTIONEN}\par
+Die Backup-Optionen können über den Konfigurations-Manager angepasst werden:\par
+- Herunterfahren nach Backup: Automatisches Herunterfahren nach Abschluss\par
+- Windows.old ausschließen: Ausschluss des Windows.old-Ordners\par
+\par
+{\b STANDARD-BACKUP-PFAD KONFIGURIEREN}\par
+1. Führen Sie den Konfigurations-Manager aus\par
+2. Wählen Sie Option 4 "Standard-Backup-Pfad konfigurieren"\par
+3. Wählen Sie aus der Liste der verfügbaren Laufwerke\par
+4. Testen Sie den Pfad mit Option 5\par
+\par
+{\b\fs24 SICHERHEITSÜBERLEGUNGEN\par}
+{\b\fs20 =========================\par}
+\par
+- Anmeldedaten: Passwörter werden mit Windows DPAPI verschlüsselt gespeichert\par
+- Netzwerkzugriff: Stellen Sie sicher, dass der Backup-Standort angemessene Berechtigungen hat\par
+- Protokolldateien: Können sensible Informationen enthalten, sichern Sie sie angemessen\par
+- Temporäre Mounts: Werden automatisch nach dem Test entfernt\par
+\par
+{\b\fs24 VERSIONSHISTORIE\par}
+{\b\fs20 =================\par}
+\par
+- v0.1: Erweiterte WIMaster-Version mit Netzwerk-Support\par
+- v0.1+: Standard-Backup-Pfad-Funktionalität hinzugefügt\par
+- v0.1+: Verbesserte Netzwerkpfad-Tests mit temporären Mounts\par
+- v0.1+: Kompakter Startdialog, integrierte Options-/Speicherort-Auswahl, C: ausgeblendet\par
+- v0.1+: Defender-Option entfernt; UI-Info-Dialog hinzugefügt\par
+\par
+{\b\fs24 SUPPORT\par}
+{\b\fs20 =======\par}
+\par
+Für Probleme und Fragen:\par
+1. Überprüfen Sie den Fehlerbehebungsabschnitt oben\par
+2. Überprüfen Sie Protokolldateien für Fehlerdetails\par
+3. Verifizieren Sie Systemanforderungen und Netzwerkverbindung\par
+4. Testen Sie mit dem interaktiven Modus vor der Verwendung des unbeaufsichtigten Modus\par
+5. Verwenden Sie den Konfigurations-Manager zum Testen der Einstellungen\par
+\par
+{\b\fs24 LIZENZ\par}
+{\b\fs20 ======\par}
+\par
+Dieses Skript basiert auf c't-WIMaster von Axel Vahldiek. Bitte beachten Sie die\par
+ursprüngliche Dokumentation unter ct.de/wimage für Lizenzinformationen.\par
+\par
+{\b\fs24 DANKSAGUNGEN\par}
+{\b\fs20 =============\par}
+\par
+- Original c't-WIMaster-Skript von Axel Vahldiek\par
+- c't-Magazin (heise.de) für die ursprüngliche Implementierung\par
+- Weiterentwicklung: Joachim Mild <joe@root-files.net>\par
+}
