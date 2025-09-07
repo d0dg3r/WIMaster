@@ -1,0 +1,82 @@
+name: Create Release with Zip
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Triggers on version tags like v1.0.0
+  workflow_dispatch:  # Allows manual trigger
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Create release zip
+      run: |
+        # Create a temporary directory for the release files
+        mkdir -p release-temp
+        
+        # Copy all files except .git, .github, and other unnecessary files
+        rsync -av --exclude='.git' \
+                  --exclude='.github' \
+                  --exclude='*.log' \
+                  --exclude='*.tmp' \
+                  --exclude='.DS_Store' \
+                  --exclude='Thumbs.db' \
+                  ./ release-temp/
+        
+        # Create the zip file
+        cd release-temp
+        zip -r ../WIMaster-release.zip .
+        cd ..
+        
+        # Verify zip was created
+        ls -la WIMaster-release.zip
+    
+    - name: Get tag name
+      id: tag
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "tag_name=manual-$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+        else
+          echo "tag_name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.tag.outputs.tag_name }}
+        release_name: WIMaster ${{ steps.tag.outputs.tag_name }}
+        body: |
+          ## WIMaster Release ${{ steps.tag.outputs.tag_name }}
+          
+          This release contains all WIMaster files packaged for distribution.
+          
+          ### What's Included:
+          - All batch and PowerShell scripts
+          - Configuration files and templates
+          - Documentation files
+          - Utility executables
+          
+          ### Installation:
+          1. Download the WIMaster-release.zip file
+          2. Extract to your desired location
+          3. Run WIMaster-Setup.bat to initialize
+        draft: false
+        prerelease: false
+    
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./WIMaster-release.zip
+        asset_name: WIMaster-release.zip
+        asset_content_type: application/zip

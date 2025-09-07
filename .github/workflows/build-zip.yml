@@ -1,0 +1,57 @@
+name: Build Zip Artifact
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Allows manual trigger
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Create build zip
+      run: |
+        # Create a temporary directory for the build files
+        mkdir -p build-temp
+        
+        # Copy all files except .git, .github, and other unnecessary files
+        rsync -av --exclude='.git' \
+                  --exclude='.github' \
+                  --exclude='*.log' \
+                  --exclude='*.tmp' \
+                  --exclude='.DS_Store' \
+                  --exclude='Thumbs.db' \
+                  ./ build-temp/
+        
+        # Create the zip file with timestamp
+        TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
+        cd build-temp
+        zip -r ../WIMaster-build-${TIMESTAMP}.zip .
+        cd ..
+        
+        # Also create a latest version without timestamp
+        cp WIMaster-build-${TIMESTAMP}.zip WIMaster-latest.zip
+        
+        # Show file info
+        ls -la WIMaster-*.zip
+    
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: WIMaster-build
+        path: |
+          WIMaster-*.zip
+        retention-days: 30
+    
+    - name: Upload latest build
+      uses: actions/upload-artifact@v4
+      with:
+        name: WIMaster-latest
+        path: WIMaster-latest.zip
+        retention-days: 90
