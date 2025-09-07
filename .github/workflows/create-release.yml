@@ -46,13 +46,10 @@ jobs:
         fi
     
     - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ steps.tag.outputs.tag_name }}
-        release_name: WIMaster ${{ steps.tag.outputs.tag_name }}
+        name: WIMaster ${{ steps.tag.outputs.tag_name }}
         body: |
           ## WIMaster Release ${{ steps.tag.outputs.tag_name }}
           
@@ -68,15 +65,9 @@ jobs:
           1. Download the WIMaster-release.zip file
           2. Extract to your desired location
           3. Run WIMaster-Setup.bat to initialize
+        files: |
+          WIMaster-release.zip
         draft: false
         prerelease: false
-    
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./WIMaster-release.zip
-        asset_name: WIMaster-release.zip
-        asset_content_type: application/zip
+        GITHUB_TOKEN: ${{ github.token }}
