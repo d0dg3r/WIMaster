@@ -1,0 +1,126 @@
+name: Build Setup.exe
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  build-setup:
+    runs-on: windows-latest  # FREE GitHub-hosted Windows runner
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET Framework
+      uses: microsoft/setup-msbuild@v1.1
+      with:
+        vs-version: latest
+    
+    - name: Verify C# compiler
+      run: |
+        where csc
+        csc /?
+      shell: cmd
+      
+    - name: Check required files
+      run: |
+        if (!(Test-Path "build-tools/WIMaster-Setup.cs")) {
+          Write-Error "build-tools/WIMaster-Setup.cs not found!"
+          exit 1
+        }
+        if (!(Test-Path "WIMaster-Setup.ps1")) {
+          Write-Error "WIMaster-Setup.ps1 not found!"
+          exit 1
+        }
+        Write-Host "✅ All required files found"
+      shell: pwsh
+      
+    - name: Build Setup.exe
+      run: |
+        # Icon parameter if available
+        $IconParam = ""
+        if (Test-Path "WIMaster_Ico.ico") {
+          $IconParam = '/win32icon:"WIMaster_Ico.ico"'
+          Write-Host "✅ Using icon: WIMaster_Ico.ico"
+        } else {
+          Write-Host "⚠️  No icon found - building without icon"
+        }
+        
+        # Compile Setup.exe from build-tools directory
+        $Args = @(
+          "/target:winexe",
+          "/platform:anycpu",
+          "/optimize+",
+          "/reference:System.Windows.Forms.dll",
+          "/reference:Microsoft.Win32.Registry.dll",
+          "/out:Setup.exe",
+          "build-tools/WIMaster-Setup.cs"
+        )
+        
+        if ($IconParam) {
+          $Args = @($IconParam) + $Args
+        }
+        
+        Write-Host "🔨 Compiling Setup.exe..."
+        Write-Host "Command: csc $($Args -join ' ')"
+        
+        & csc @Args
+        
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "✅ Setup.exe successfully compiled!"
+          
+          # Show file info
+          $FileInfo = Get-Item "Setup.exe"
+          Write-Host "📁 File size: $($FileInfo.Length) bytes"
+          Write-Host "📅 Created: $($FileInfo.CreationTime)"
+        } else {
+          Write-Error "❌ Compilation failed with exit code $LASTEXITCODE"
+          exit 1
+        }
+      shell: pwsh
+      
+    - name: Test Setup.exe
+      run: |
+        # Basic test - just check if file exists and is executable
+        if (!(Test-Path "Setup.exe")) {
+          Write-Error "Setup.exe was not created!"
+          exit 1
+        }
+        
+        # Check file properties
+        $FileInfo = Get-Item "Setup.exe"
+        if ($FileInfo.Length -lt 1000) {
+          Write-Error "Setup.exe seems too small (less than 1KB)"
+          exit 1
+        }
+        
+        Write-Host "✅ Setup.exe basic tests passed"
+        Write-Host "📊 File details:"
+        Write-Host "   Size: $($FileInfo.Length) bytes"
+        Write-Host "   Type: $($FileInfo.Extension)"
+        
+        # Note: We can't run the actual Setup.exe in CI because it requires UAC
+        Write-Host "ℹ️  Actual execution test skipped (requires UAC)"
+      shell: pwsh
+      
+    - name: Upload Setup.exe as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: WIMaster-Setup-exe
+        path: Setup.exe
+        retention-days: 30
+        
+    - name: Upload build logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs
+        path: |
+          *.log
+          *.tmp
+        retention-days: 7
+        if-no-files-found: ignore
