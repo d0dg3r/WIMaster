@@ -14,7 +14,6 @@ $HilfeGUI = " Entwickelt von Joachim Mild <joe@devops-geek.net>`nBasierend auf c
   Setup-Skript fuer WIMaster - Windows System Backup Tool mit Netzwerk-Support.
   Lesen Sie unbedingt die Anleitungen zum Skript.
 .NOTES
-  Version:        1.0
   Original Autor: Axel Vahldiek <ctwimage@ct.de> (c't-WIMage)
   Weiterentwicklung: Joachim Mild <joe@devops-geek.net>
   Creation Date:  2025-01-27

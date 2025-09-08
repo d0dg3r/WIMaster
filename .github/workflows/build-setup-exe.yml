@@ -20,11 +20,64 @@ jobs:
       with:
         vs-version: latest
     
-    - name: Verify C# compiler
+    - name: Find and setup C# compiler
       run: |
-        where csc
-        csc /?
-      shell: cmd
+        Write-Host "🔍 Searching for C# compiler..."
+        
+        # Mögliche Compiler-Pfade in Windows-GitHub-Runnern
+        $PossiblePaths = @(
+          "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\Roslyn\csc.exe",
+          "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\Roslyn\csc.exe",
+          "${env:ProgramFiles}\dotnet\sdk\*\Roslyn\bincore\csc.dll",
+          "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\BuildTools\MSBuild\Current\Bin\Roslyn\csc.exe",
+          "${env:ProgramFiles}\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\Roslyn\csc.exe"
+        )
+        
+        # Windows SDK Pfade
+        $WindowsKitsPaths = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\NETFXSDK\*\bin\NETFX*\x64\csc.exe" -ErrorAction SilentlyContinue
+        if ($WindowsKitsPaths) {
+          $PossiblePaths += $WindowsKitsPaths.FullName
+        }
+        
+        # .NET Framework Compiler im Windows SDK
+        $NetFxPaths = Get-ChildItem "${env:ProgramFiles(x86)}\Microsoft SDKs\Windows\*\bin\NETFX*\x64\csc.exe" -ErrorAction SilentlyContinue
+        if ($NetFxPaths) {
+          $PossiblePaths += $NetFxPaths.FullName
+        }
+        
+        $CscPath = $null
+        foreach ($Path in $PossiblePaths) {
+          $ResolvedPaths = Resolve-Path $Path -ErrorAction SilentlyContinue
+          if ($ResolvedPaths) {
+            $CscPath = $ResolvedPaths[0].Path
+            Write-Host "✅ Found C# compiler: $CscPath"
+            break
+          }
+        }
+        
+        if (-not $CscPath) {
+          Write-Host "❌ C# compiler not found in standard locations"
+          Write-Host "Available Visual Studio installations:"
+          Get-ChildItem "${env:ProgramFiles}\Microsoft Visual Studio" -ErrorAction SilentlyContinue | Format-Table Name
+          Get-ChildItem "${env:ProgramFiles(x86)}\Microsoft Visual Studio" -ErrorAction SilentlyContinue | Format-Table Name
+          
+          # Fallback: Try to use dotnet
+          if (Get-Command dotnet -ErrorAction SilentlyContinue) {
+            Write-Host "🔄 Trying .NET CLI as fallback..."
+            $env:USE_DOTNET_CLI = "true"
+          } else {
+            throw "No C# compiler found and .NET CLI not available"
+          }
+        } else {
+          # C# Compiler gefunden - zu PATH hinzufügen
+          $CscDir = Split-Path $CscPath -Parent
+          $env:PATH = "$CscDir;$env:PATH"
+          Write-Host "🔧 Added to PATH: $CscDir"
+          
+          # Test compiler
+          & $CscPath /help | Select-Object -First 3
+        }
+      shell: pwsh
       
     - name: Check required files
       run: |
@@ -50,25 +103,52 @@ jobs:
           Write-Host "⚠️  No icon found - building without icon"
         }
         
-        # Compile Setup.exe from build-tools directory
-        $Args = @(
-          "/target:winexe",
-          "/platform:anycpu",
-          "/optimize+",
-          "/reference:System.Windows.Forms.dll",
-          "/reference:Microsoft.Win32.Registry.dll",
-          "/out:Setup.exe",
-          "build-tools/WIMaster-Setup.cs"
-        )
-        
-        if ($IconParam) {
-          $Args = @($IconParam) + $Args
-        }
-        
         Write-Host "🔨 Compiling Setup.exe..."
-        Write-Host "Command: csc $($Args -join ' ')"
         
-        & csc @Args
+        if ($env:USE_DOTNET_CLI -eq "true") {
+          Write-Host "Using .NET CLI for compilation..."
+          
+          # Create temporary csproj file for .NET CLI
+          $CsprojContent = @"
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>Setup</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Microsoft.Win32.Registry" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="build-tools/WIMaster-Setup.cs" />
+  </ItemGroup>
+</Project>
+"@
+          $CsprojContent | Out-File -FilePath "TempSetup.csproj" -Encoding UTF8
+          
+          dotnet build TempSetup.csproj -c Release -o .
+          Remove-Item "TempSetup.csproj" -Force
+          
+        } else {
+          # Use traditional csc.exe
+          $Args = @(
+            "/target:winexe",
+            "/platform:anycpu",
+            "/optimize+",
+            "/reference:System.Windows.Forms.dll",
+            "/reference:Microsoft.Win32.Registry.dll",
+            "/out:Setup.exe",
+            "build-tools/WIMaster-Setup.cs"
+          )
+          
+          if ($IconParam) {
+            $Args = @($IconParam) + $Args
+          }
+          
+          Write-Host "Command: csc $($Args -join ' ')"
+          & csc @Args
+        }
         
         if ($LASTEXITCODE -eq 0) {
           Write-Host "✅ Setup.exe successfully compiled!"
