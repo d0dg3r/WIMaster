@@ -136,16 +136,54 @@ jobs:
           Remove-Item "TempSetup.csproj" -Force
           
         } else {
-          # Use traditional csc.exe
-          $Args = @(
-            "/target:winexe",
-            "/platform:anycpu",
-            "/optimize+",
-            "/reference:System.Windows.Forms.dll",
-            "/reference:Microsoft.Win32.Registry.dll",
-            "/out:Setup.exe",
-            "build-tools/WIMaster-Setup.cs"
+          # Use traditional csc.exe with full .NET Framework references
+          
+          # Find .NET Framework reference assemblies
+          $NetFxPath = "${env:ProgramFiles(x86)}\Reference Assemblies\Microsoft\Framework\.NETFramework"
+          $LatestFramework = Get-ChildItem $NetFxPath | Where-Object {$_.Name -match "^v4\."} | Sort-Object Name -Descending | Select-Object -First 1
+          $FrameworkPath = $LatestFramework.FullName
+          
+          Write-Host "📚 Using .NET Framework: $($LatestFramework.Name)"
+          Write-Host "📂 Framework path: $FrameworkPath"
+          
+          # Find Microsoft.Win32.Registry.dll location
+          $RegistryDll = $null
+          $PossibleRegistryPaths = @(
+            "$FrameworkPath\Facades\Microsoft.Win32.Registry.dll",
+            "$FrameworkPath\Microsoft.Win32.Registry.dll",
+            "${env:ProgramFiles}\dotnet\shared\Microsoft.NETCore.App\*\Microsoft.Win32.Registry.dll"
           )
+          
+          foreach ($Path in $PossibleRegistryPaths) {
+            $ResolvedPaths = Resolve-Path $Path -ErrorAction SilentlyContinue
+            if ($ResolvedPaths) {
+              $RegistryDll = $ResolvedPaths[0].Path
+              Write-Host "📦 Found Registry DLL: $RegistryDll"
+              break
+            }
+          }
+          
+          if (-not $RegistryDll) {
+            Write-Host "⚠️  Microsoft.Win32.Registry.dll not found, compiling without it"
+            $Args = @(
+              "/target:winexe",
+              "/platform:anycpu",
+              "/optimize+",
+              "/reference:$FrameworkPath\System.Windows.Forms.dll",
+              "/out:Setup.exe",
+              "build-tools/WIMaster-Setup.cs"
+            )
+          } else {
+            $Args = @(
+              "/target:winexe",
+              "/platform:anycpu",
+              "/optimize+",
+              "/reference:$FrameworkPath\System.Windows.Forms.dll",
+              "/reference:$RegistryDll",
+              "/out:Setup.exe",
+              "build-tools/WIMaster-Setup.cs"
+            )
+          }
           
           if ($IconParam) {
             $Args = @($IconParam) + $Args
