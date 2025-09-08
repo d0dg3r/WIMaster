@@ -9,7 +9,7 @@ on:
 
 jobs:
   build-setup:
-    runs-on: windows-latest  # FREE GitHub-hosted Windows runner
+    runs-on: windows-2022  # Specify Windows Server 2022 explicitly
     
     steps:
     - name: Checkout code
@@ -258,6 +258,8 @@ jobs:
         name: WIMaster-Setup-exe
         path: Setup.exe
         retention-days: 30
+        compression-level: 6
+        if-no-files-found: error
         
     - name: Upload build logs
       if: always()

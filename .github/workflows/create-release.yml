@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-setup-exe:
-    runs-on: windows-latest
+    runs-on: windows-2022  # Specify Windows Server 2022 explicitly
     
     steps:
     - name: Checkout code
@@ -207,6 +207,8 @@ jobs:
         name: setup-exe
         path: Setup.exe
         retention-days: 1
+        compression-level: 6
+        if-no-files-found: error
 
   create-release:
     runs-on: ubuntu-latest
@@ -221,6 +223,26 @@ jobs:
       with:
         name: setup-exe
         path: .
+      continue-on-error: false
+      
+    - name: Wait for artifact availability
+      run: |
+        $maxRetries = 10
+        $retryCount = 0
+        
+        while (-not (Test-Path "Setup.exe") -and $retryCount -lt $maxRetries) {
+          Write-Host "⏳ Waiting for Setup.exe artifact... (Attempt $($retryCount + 1)/$maxRetries)"
+          Start-Sleep -Seconds 5
+          $retryCount++
+        }
+        
+        if (-not (Test-Path "Setup.exe")) {
+          Write-Host "❌ Setup.exe artifact not found after $maxRetries retries"
+          exit 1
+        }
+        
+        Write-Host "✅ Setup.exe artifact found"
+      shell: pwsh
       
     - name: Verify Setup.exe
       run: |
