@@ -260,25 +260,56 @@ jobs:
       
     - name: Create release zip
       run: |
+        echo "📦 Creating WIMaster release package..."
+        
+        # Verify Setup.exe exists
+        if [ ! -f "Setup.exe" ]; then
+          echo "❌ Setup.exe not found - cannot create release!"
+          exit 1
+        fi
+        
+        echo "✅ Setup.exe found ($(stat -c%s Setup.exe) bytes)"
+        
         # Create a temporary directory for the release files
         mkdir -p release-temp
         
         # Copy all files except .git, .github, and other unnecessary files
+        echo "📂 Copying repository files..."
         rsync -av --exclude='.git' \
                   --exclude='.github' \
                   --exclude='*.log' \
                   --exclude='*.tmp' \
                   --exclude='.DS_Store' \
                   --exclude='Thumbs.db' \
+                  --exclude='release-temp' \
                   ./ release-temp/
         
+        # Ensure Setup.exe is in the release package
+        echo "📋 Ensuring Setup.exe is included..."
+        cp Setup.exe release-temp/
+        
+        # Verify content before zipping
+        echo "📋 Release package contents:"
+        ls -la release-temp/ | head -20
+        echo "📊 Setup.exe in package: $(stat -c%s release-temp/Setup.exe) bytes"
+        
         # Create the zip file
+        echo "🗜️ Creating zip archive..."
         cd release-temp
         zip -r ../WIMaster-release.zip .
         cd ..
         
-        # Verify zip was created
-        ls -la WIMaster-release.zip
+        # Verify zip was created and show details
+        if [ -f "WIMaster-release.zip" ]; then
+          echo "✅ WIMaster-release.zip created successfully"
+          echo "📊 Zip file details:"
+          ls -la WIMaster-release.zip
+          echo "📋 Zip contents preview:"
+          unzip -l WIMaster-release.zip | head -20
+        else
+          echo "❌ Failed to create WIMaster-release.zip"
+          exit 1
+        fi
     
     - name: Get tag name
       id: tag
@@ -288,6 +319,26 @@ jobs:
         else
           echo "tag_name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
         fi
+    
+    - name: Verify release files before upload
+      run: |
+        echo "🔍 Final verification before release upload..."
+        
+        if [ ! -f "WIMaster-release.zip" ]; then
+          echo "❌ WIMaster-release.zip not found!"
+          exit 1
+        fi
+        
+        # Check zip file size (should be > 1MB for a complete release)
+        zip_size=$(stat -c%s WIMaster-release.zip)
+        if [ $zip_size -lt 1048576 ]; then
+          echo "❌ WIMaster-release.zip too small ($zip_size bytes) - incomplete package!"
+          exit 1
+        fi
+        
+        echo "✅ WIMaster-release.zip verified ($zip_size bytes)"
+        echo "📋 Release files ready for upload:"
+        ls -la WIMaster-release.zip
     
     - name: Create Release
       uses: softprops/action-gh-release@v2
@@ -319,6 +370,10 @@ jobs:
           - ✅ Automatic UAC elevation
           - ✅ Enhanced error handling
           - ✅ System requirements validation
+          
+          ### Package Contents:
+          - Complete WIMaster toolkit with Setup.exe
+          - Size: $(stat -c%s WIMaster-release.zip 2>/dev/null || echo "Unknown") bytes
         files: |
           WIMaster-release.zip
         draft: false
