@@ -2,6 +2,30 @@
 
 Ein PowerShell-Skript zur Erstellung von Windows Image (WIM) Backups mit Netzwerk-Speicher-Support und unbeaufsichtigten Betriebsmöglichkeiten.
 
+## ⚠️ **Entwicklungsstatus - Wichtiger Hinweis**
+
+> **🚧 Dieses Projekt befindet sich noch in aktiver Entwicklung und ist derzeit nicht für den produktiven Einsatz geeignet.**
+>
+> ### ✅ **Was bereits funktioniert:**
+> - **Backup-Funktionalität**: Vollständig implementiert und getestet
+> - **Windows Image (WIM) Erstellung**: Stabil und funktionsfähig
+> - **Netzwerk-Speicher-Support**: Läuft zuverlässig
+> - **GUI und Benutzeroberfläche**: Vollständig funktional
+>
+> ### 🔄 **Was noch in Entwicklung ist:**
+> - **Restore-Funktionalität**: Aktuell in Implementierung
+> - **Erweiterte Wiederherstellungsoptionen**: Noch nicht verfügbar
+> - **Vollständige Dokumentation**: Wird kontinuierlich erweitert
+>
+> ### 📋 **Empfehlung:**
+> - **Für Backup-Zwecke**: Kann verwendet werden, da diese Funktionalität stabil läuft
+> - **Für Restore-Operationen**: Warten Sie auf zukünftige Releases
+> - **Produktive Umgebungen**: Verwenden Sie bewährte Backup-Lösungen bis zur finalen Version
+>
+> **Bleiben Sie auf dem Laufenden über GitHub Releases für Updates und neue Funktionalität!**
+
+---
+
 ## Funktionen
 
 - **Windows System-Backup**: Erstellt WIM-Images von Windows-Installationen
