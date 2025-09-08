@@ -274,4 +274,3 @@ Dieses Skript basiert auf c't-WIMage von Axel Vahldiek. Bitte beachten Sie die u
 
 - Original c't-WIMage-Skript von Axel Vahldiek
 - c't-Magazin (heise.de) für die ursprüngliche Implementierung
-- Weiterentwicklung: Joachim Mild <joe@devops-geek.net>
