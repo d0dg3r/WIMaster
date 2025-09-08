@@ -7,6 +7,10 @@ on:
     branches: [ main ]
   workflow_dispatch:  # Manual trigger
 
+permissions:
+  contents: read   # Required for checking out code
+  actions: write   # Required for uploading artifacts
+
 jobs:
   build-setup:
     runs-on: windows-2022  # Specify Windows Server 2022 explicitly

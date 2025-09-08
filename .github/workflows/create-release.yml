@@ -6,6 +6,10 @@ on:
       - 'v*.*.*'  # Triggers on version tags like v1.0.0
   workflow_dispatch:  # Allows manual trigger
 
+permissions:
+  contents: write  # Required for creating releases
+  actions: read    # Required for downloading artifacts
+
 jobs:
   build-setup-exe:
     runs-on: windows-2022  # Specify Windows Server 2022 explicitly
@@ -286,7 +290,7 @@ jobs:
         fi
     
     - name: Create Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ steps.tag.outputs.tag_name }}
         name: WIMaster ${{ steps.tag.outputs.tag_name }}
@@ -319,5 +323,7 @@ jobs:
           WIMaster-release.zip
         draft: false
         prerelease: false
+        fail_on_unmatched_files: true
+        generate_release_notes: false
       env:
-        GITHUB_TOKEN: ${{ github.token }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
