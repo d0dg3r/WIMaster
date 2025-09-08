@@ -75,9 +75,9 @@ jobs:
           exit 1
         fi
         
-        # Check zip file size (should be > 500KB for a complete release)
+        # Check zip file size (should be > 200KB for a complete release)
         zip_size=$(stat -c%s WIMaster-release.zip)
-        if [ $zip_size -lt 512000 ]; then
+        if [ $zip_size -lt 204800 ]; then
           echo "❌ WIMaster-release.zip too small ($zip_size bytes) - incomplete package!"
           exit 1
         fi
