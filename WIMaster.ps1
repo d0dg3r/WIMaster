@@ -1,6 +1,33 @@
 ﻿#Requires -RunAsAdministrator
 #Requires -Version 3.0
 
+<#
+.SYNOPSIS
+  WIMaster - Windows System-Backup mit Netzwerk-Support
+.DESCRIPTION
+  Erweiterte Version von WIMaster mit Netzwerk-Backup-Funktionalitaet und unbeaufsichtigtem Modus.
+  Basierend auf dem urspruenglichen c't-WIMage von Axel Vahldiek.
+.PARAMETER Unattended
+  Fuehrt das Backup im unbeaufsichtigten Modus aus (ohne GUI)
+.PARAMETER ConfigPath
+  Alternativer Pfad zur Konfigurationsdatei
+.PARAMETER BackupPath
+  Spezifischer Backup-Pfad (ueberschreibt Konfiguration)
+.NOTES
+  Version:        0.2
+  Original Autor: Axel Vahldiek <axv@ct.de> (c't-WIMage)
+  Weiterentwicklung: Joachim Mild <joe@devops-geek.net>
+  Erweiterungen:  Netzwerk-Support, unbeaufsichtigter Modus, verbesserte Konfiguration
+  Erstellungsdatum: 2025-01-27
+#>
+
+[CmdletBinding()]
+param(
+    [switch]$Unattended,
+    [string]$ConfigPath = "",
+    [string]$BackupPath = ""
+)
+
 # WIMaster - Windows System Backup Tool
 # This script may be flagged by antivirus software because it:
 # - Requires administrator privileges
@@ -11,29 +38,11 @@
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
-# Parameter fuer unbeaufsichtigten Modus pruefen
-$Unattended = $false
-
-# Pruefe Kommandozeilenargumente
-foreach ($arg in $args) {
-    switch ($arg) {
-        "-Unattended" { $Unattended = $true }
-    }
-}
-
-<#
-.SYNOPSIS
-  WIMaster - Windows System-Backup mit Netzwerk-Support
-.DESCRIPTION
-  Erweiterte Version von WIMaster mit Netzwerk-Backup-Funktionalitaet und unbeaufsichtigtem Modus.
-  Basierend auf dem urspruenglichen c't-WIMage von Axel Vahldiek.
-.NOTES
-  Version:        0.1
-  Original Autor: Axel Vahldiek <axv@ct.de> (c't-WIMage)
-  Weiterentwicklung: Joachim Mild <joe@devops-geek.net>
-  Erweiterungen:  Netzwerk-Support, unbeaufsichtigter Modus, verbesserte Konfiguration
-  Erstellungsdatum: 2025-01-27
- #>
+# Konstanten definieren
+New-Variable -Name "REQUIRED_BUILD" -Value 19042 -Option ReadOnly -Force
+New-Variable -Name "LOG_LEVELS" -Value @('0','1','2','3') -Option ReadOnly -Force
+New-Variable -Name "SUPPORTED_DRIVE_TYPES" -Value @(2,3) -Option ReadOnly -Force
+New-Variable -Name "MIN_FREE_SPACE_GB" -Value 20 -Option ReadOnly -Force
 
 # Hilfetext fuer Benutzer
 $Hilfe = "WIMaster - Windows System Backup Tool`r`nEntwickelt von Joachim Mild <joe@devops-geek.net>`r`nBasierend auf c't-WIMage von Axel Vahldiek`r`n`r`n"
@@ -45,7 +54,21 @@ $Hilfe = "WIMaster - Windows System Backup Tool`r`nEntwickelt von Joachim Mild <
 # Ordner-Definitionen 
 
 # Hauptverzeichnisse definieren
-$Source = Join-Path (Split-Path $PSScriptRoot) "Sources"; If (-Not (Test-Path $Source)) { New-Item -Path $Source -ItemType Directory | Out-Null}
+$SourceParams = @{
+    Path = Join-Path (Split-Path $PSScriptRoot) "Sources"
+    ItemType = "Directory"
+    Force = $true
+    ErrorAction = "SilentlyContinue"
+}
+$Source = $SourceParams.Path
+if (-not (Test-Path $Source)) { 
+    try {
+        New-Item @SourceParams | Out-Null
+    } catch {
+        Write-Error "Fehler beim Erstellen des Sources-Verzeichnisses: $($_.Exception.Message)"
+        exit 1
+    }
+}
 $ScratchDir = Join-Path $Source "\WIMaster_Scratch"
 
 # Von WIMaster-Setup benötigte Dateien
@@ -56,7 +79,7 @@ $ShadowExe = Join-Path $PSScriptRoot "\vshadow.exe"          # Volume Shadow Cop
 $Dism = Join-Path $env:windir "\system32\Dism.exe"          # Deployment Image Servicing and Management
 
 # Konfigurationsdatei-Pfad
-$ConfigFile = Join-Path $PSScriptRoot "WIMaster-Config.json"
+$ConfigFile = if ($ConfigPath) { $ConfigPath } else { Join-Path $PSScriptRoot "WIMaster-Config.json" }
 
 # Netzwerk-Pfad-Variablen (aus Konfiguration geladen)
 $Script:NetworkPath = ""           # UNC-Pfad fuer Netzwerk-Backup
@@ -264,168 +287,367 @@ Function ShortMessage {
 ######################
 
 # Funktion zum Entschluesseln von Passwoertern mit Windows DPAPI
-Function Decrypt-Password {
-	param([string]$EncryptedPassword)
+Function ConvertFrom-EncryptedPassword {
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory=$false)]
+		[SecureString]$EncryptedPassword
+	)
 	
 	# Leere verschluesselte Passwoerter zurueckgeben
-	If ([string]::IsNullOrEmpty($EncryptedPassword)) {
-		Return ""
+	if ($null -eq $EncryptedPassword) {
+		return [SecureString]::new()
 	}
 	
-	Try {
-		# Verschluesseltes Passwort entschluesseln
-		$SecureString = ConvertTo-SecureString -String $EncryptedPassword
-		$BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureString)
-		$PlainTextPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
-		[System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
-		Return $PlainTextPassword
-	} Catch {
-		Write-Error "Fehler beim Entschluesseln des Passworts: $($_.Exception.Message)"
-		Return ""
+	try {
+		# SecureString direkt zurückgeben
+		return $EncryptedPassword
+	} catch [System.Security.Cryptography.CryptographicException] {
+		Write-Error "Kryptografischer Fehler beim Entschluesseln: $($_.Exception.Message)"
+		return [SecureString]::new()
+	} catch {
+		Write-Error "Unbekannter Fehler beim Entschluesseln: $($_.Exception.Message)"
+		return [SecureString]::new()
 	}
 }
 
 # Funktion zum Lesen der Konfiguration aus der JSON-Datei
 Function Read-Config {
+	[CmdletBinding()]
+	param(
+		[string]$ConfigPath = $ConfigFile
+	)
+	
 	# Pruefen ob Konfigurationsdatei existiert
-	If (-not (Test-Path $ConfigFile)) {
-		Write-Warning "Konfigurationsdatei nicht gefunden: $ConfigFile"
-		Return $null
+	if (-not (Test-Path $ConfigPath)) {
+		Write-Warning "Konfigurationsdatei nicht gefunden: $ConfigPath"
+		return $null
 	}
 	
-	Try {
+	try {
 		# JSON-Datei lesen und parsen
-		$JsonContent = Get-Content $ConfigFile -Raw -Encoding UTF8
-		$Config = $JsonContent | ConvertFrom-Json
-		Return $Config
-	} Catch {
-		Write-Error "Fehler beim Lesen der JSON-Konfigurationsdatei: $($_.Exception.Message)"
-		Return $null
+		$JsonContent = Get-Content $ConfigPath -Raw -Encoding UTF8 -ErrorAction Stop
+		$Config = $JsonContent | ConvertFrom-Json -ErrorAction Stop
+		
+		# Schema-Validierung: Standard-Strukturen hinzufuegen falls nicht vorhanden
+		if (-not $Config.PSObject.Properties['Network']) {
+			$Config | Add-Member -Type NoteProperty -Name 'Network' -Value @{} -Force
+		}
+		if (-not $Config.PSObject.Properties['Backup']) {
+			$Config | Add-Member -Type NoteProperty -Name 'Backup' -Value @{} -Force
+		}
+		if (-not $Config.PSObject.Properties['Advanced']) {
+			$Config | Add-Member -Type NoteProperty -Name 'Advanced' -Value @{} -Force
+		}
+		
+		return $Config
+	} catch [System.ArgumentException] {
+		Write-Error "JSON-Format-Fehler in ${ConfigPath}: $($_.Exception.Message)"
+		return $null
+	} catch [System.IO.FileNotFoundException] {
+		Write-Error "Konfigurationsdatei nicht gefunden: $ConfigPath"
+		return $null
+	} catch {
+		Write-Error "Unerwarteter Fehler beim Lesen der Konfiguration: $($_.Exception.Message)"
+		return $null
 	}
 }
 
 # Funktion zum Laden der Konfiguration
-Function Load-Config {
-	$Config = Read-Config
+Function Import-Config {
+	[CmdletBinding()]
+	param()
 	
-	If ($Config -ne $null) {
-		# Netzwerk-Einstellungen laden
-		If ($Config.Network) {
-			$Script:EnableNetworkBackup = $Config.Network.EnableNetworkBackup
-			$Script:NetworkPath = $Config.Network.NetworkPath
-			$Script:NetworkUser = $Config.Network.NetworkUser
+	try {
+		$Config = Read-Config -ErrorAction Stop
+		
+		if ($null -ne $Config) {
+			# Netzwerk-Einstellungen laden
+			if ($Config.Network) {
+				$Script:EnableNetworkBackup = [bool]($Config.Network.EnableNetworkBackup -eq $true)
+				$Script:NetworkPath = [string]($Config.Network.NetworkPath ?? "")
+				$Script:NetworkUser = [string]($Config.Network.NetworkUser ?? "")
+				
+				# Passwort entschluesseln
+				$EncryptedPassword = $Config.Network.NetworkPassword
+				$Script:NetworkPassword = ConvertFrom-EncryptedPassword $EncryptedPassword
+			}
 			
-			# Passwort entschluesseln
-			$EncryptedPassword = $Config.Network.NetworkPassword
-			$Script:NetworkPassword = Decrypt-Password $EncryptedPassword
+			# Backup-Einstellungen laden
+			if ($Config.Backup) {
+				$Script:Shutdown = [bool]($Config.Backup.DefaultShutdown -eq $true)
+				$Script:NoWindowsold = [bool]($Config.Backup.DefaultNoWindowsold -eq $true)
+				$Script:DefaultBackupPath = [string]($Config.Backup.DefaultBackupPath ?? "")
+			}
+			
+			# Erweiterte Einstellungen laden
+			if ($Config.Advanced) {
+				$ProposedLogLevel = $Config.Advanced.LogLevel
+				if ($ProposedLogLevel -in $LOG_LEVELS) {
+					$Script:LogLevel = $ProposedLogLevel
+				} else {
+					Write-Warning "Ungültiger LogLevel '$ProposedLogLevel' in Konfiguration. Verwende Standard '3'."
+					$Script:LogLevel = "3"
+				}
+			}
+			
+			# Override mit Command-Line-Parameter
+			if ($BackupPath) {
+				$Script:DefaultBackupPath = $BackupPath
+				Write-Verbose "Backup-Pfad durch Parameter überschrieben: $BackupPath"
+			}
 		}
-		
-		# Backup-Einstellungen laden
-		If ($Config.Backup) {
-			$Script:Shutdown = $Config.Backup.DefaultShutdown
-			$Script:NoWindowsold = $Config.Backup.DefaultNoWindowsold
-			$Script:DefaultBackupPath = $Config.Backup.DefaultBackupPath
-		}
-		
-		# Erweiterte Einstellungen laden
-		If ($Config.Advanced) {
-			$Script:LogLevel = $Config.Advanced.LogLevel
-		}
+	} catch {
+		Write-Error "Fehler beim Laden der Konfiguration: $($_.Exception.Message)"
+		# Fallback auf Standard-Werte
+		$Script:EnableNetworkBackup = $false
+		$Script:Shutdown = $false
+		$Script:NoWindowsold = $false
+		$Script:LogLevel = "3"
 	}
 }
 
 # Konfiguration jetzt laden, da Funktionen definiert sind
-Load-Config
+Import-Config
 
-# Funktionen fuer Ausgabe (muessen vor der Verwendung definiert werden)
-function Ausgabe {
-	param ([String]$JobAusgabeText, [Switch]$Replace)
-	If ($Unattended) {
-		Write-Host $JobAusgabeText
-	} Else {
-		If ($Replace) {
+# Einheitliches Logging-System
+Function Write-WIMasterLog {
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory=$true)]
+		[string]$Message,
+		
+		[Parameter(Mandatory=$false)]
+		[ValidateSet('Info','Warning','Error','Debug','Success')]
+		[string]$Level = 'Info',
+		
+		[Parameter(Mandatory=$false)]
+		[switch]$Replace,
+		
+		[Parameter(Mandatory=$false)]
+		[switch]$Bold
+	)
+	
+	$Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+	$LogMessage = "[$Timestamp] [$Level] $Message"
+	
+	# Console-Ausgabe mit Farben
+	if ($Unattended) {
+		$Color = switch($Level) {
+			'Error' { 'Red' }
+			'Warning' { 'Yellow' }
+			'Success' { 'Green' }
+			'Debug' { 'Gray' }
+			default { 'White' }
+		}
+		
+		if ($Bold) {
+			Write-Host $Message -ForegroundColor $Color
+		} else {
+			Write-Host $Message -ForegroundColor $Color
+		}
+	} else {
+		# GUI-Ausgabe
+		if ($Replace -and $JobSaveTickerText) {
 			$JobTicker.rtf = $JobSaveTickerText
-			$JobTicker.AppendText("`r`n$JobAusgabeText")
+			$JobTicker.AppendText("`r`n$Message")
 			$JobTicker.SelectionStart = $JobTicker.Text.Length
 			$JobTicker.ScrollToCaret()
+		} else {
+			if ($Bold) {
+				$StartPos = $JobTicker.Text.Length
+				$JobTicker.AppendText($Message)
+				$EndPos = $JobTicker.Text.Length
+				$JobTicker.Select($StartPos, $EndPos - $StartPos)
+				$JobTicker.SelectionFont = New-Object System.Drawing.Font($JobTicker.Font, [System.Drawing.FontStyle]::Bold)
+				$JobTicker.Select($EndPos, 0)
+				$JobTicker.ScrollToCaret()
 			} else {
-			$JobTicker.AppendText("${JobAusgabeText}`r`n")
-			$JobWindow.Refresh()
+				$JobTicker.AppendText("${Message}`r`n")
+				$JobWindow.Refresh()
+			}
+		}
+	}
+	
+	# Datei-Logging (nur bei wichtigen Nachrichten)
+	if ($Level -in @('Error', 'Warning', 'Success')) {
+		try {
+			Add-Content -Path $LogFile -Value $LogMessage -Encoding UTF8 -ErrorAction SilentlyContinue
+		} catch {
+			# Ignoriere Logging-Fehler
 		}
 	}
 }
 
-function Fettdruck {
-    param ([String]$JobFettText)
-    If ($Unattended) {
-        Write-Host $JobFettText -ForegroundColor Yellow
-    } Else {
-        $StartPos = $JobTicker.Text.Length
-        $JobTicker.AppendText($JobFettText)
-        $EndPos = $JobTicker.Text.Length
-        $JobTicker.Select($StartPos, $EndPos - $StartPos)
-        $JobTicker.SelectionFont = New-Object System.Drawing.Font($JobTicker.Font, [System.Drawing.FontStyle]::Bold)
-        $JobTicker.Select($EndPos, 0)
-        $JobTicker.ScrollToCaret()
-    }
+# Kompatibilitäts-Wrapper für bestehenden Code
+Function Ausgabe {
+	[CmdletBinding()]
+	param (
+		[String]$JobAusgabeText, 
+		[Switch]$Replace
+	)
+	Write-WIMasterLog -Message $JobAusgabeText -Level 'Info' -Replace:$Replace
 }
 
-# Funktion zum Testen der Backup-Pfad-Erreichbarkeit
+Function Fettdruck {
+	[CmdletBinding()]
+	param ([String]$JobFettText)
+	Write-WIMasterLog -Message $JobFettText -Level 'Success' -Bold
+}
+
+# Funktion zum Testen der Backup-Pfad-Erreichbarkeit mit Retry-Logic
 Function TestBackupPath {
-	$TestPath = If ($Script:SelectedBackupPath) { $Script:SelectedBackupPath } ElseIf (-not [string]::IsNullOrEmpty($Script:DefaultBackupPath)) { $Script:DefaultBackupPath } Else { $Script:NetworkPath }
+	[CmdletBinding()]
+	param(
+		[int]$MaxRetries = 3,
+		[int]$DelaySeconds = 2
+	)
 	
-	Try {
-		# For network paths, attempt to authenticate first
-		If ($TestPath -like "\\*") {
-			# Try to authenticate with network credentials
-			Try {
-				# Test path with credentials
-				$PathTest = Test-Path $TestPath -ErrorAction Stop
-				
-				# If still not accessible, try to map temporarily for testing
-				If (-not $PathTest) {
-					$TempDrive = "Z:"
-					# Remove any existing mapping
-					net use $TempDrive /delete /y 2>$null
-					# Map with credentials
-					net use $TempDrive $TestPath /user:$Script:NetworkUser $Script:NetworkPassword | Out-Null
-					If ($LASTEXITCODE -eq 0) {
-						$PathTest = Test-Path $TempDrive -ErrorAction Stop
-						# Clean up temporary mapping
-						net use $TempDrive /delete /y 2>$null
-					}
-				}
-			} Catch {
-				# If credential authentication fails, try without credentials
+	$TestPath = if ($Script:SelectedBackupPath) { 
+		$Script:SelectedBackupPath 
+	} elseif (-not [string]::IsNullOrEmpty($Script:DefaultBackupPath)) { 
+		$Script:DefaultBackupPath 
+	} else { 
+		$Script:NetworkPath 
+	}
+	
+	# Input-Validierung
+	if ([string]::IsNullOrEmpty($TestPath)) {
+		Write-Error "Kein Backup-Pfad definiert"
+		return $false
+	}
+	
+	# Pfad-Format validieren
+	if (-not ($TestPath -match '^[A-Z]:\\' -or $TestPath -match '^\\\\')) {
+		Write-Error "Ungültiges Pfad-Format: $TestPath"
+		return $false
+	}
+	
+	for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
+		try {
+			Write-Verbose "Teste Backup-Pfad (Versuch $attempt/$MaxRetries): $TestPath"
+			
+			# Für Netzwerkpfade, versuche Authentifizierung
+			if ($TestPath -like "\\*") {
+				$PathTest = Test-NetworkPath -Path $TestPath -Attempt $attempt
+			} else {
+				# Für lokale Pfade, teste direkt
 				$PathTest = Test-Path $TestPath -ErrorAction Stop
 			}
-		} Else {
-			# For local paths, just test directly
-			$PathTest = Test-Path $TestPath -ErrorAction Stop
+			
+			if ($PathTest) {
+				if ($Unattended) {
+					Write-Host "Backup-Pfad erreichbar: $TestPath"
+				}
+				return $true
+			} else {
+				throw "Backup-Pfad ist nicht erreichbar"
+			}
+		} catch {
+			Write-Warning "Versuch $attempt fehlgeschlagen: $($_.Exception.Message)"
+			
+			if ($attempt -eq $MaxRetries) {
+				# Letzter Versuch fehlgeschlagen
+				if ($Unattended) {
+					Write-Host "ERROR: Backup-Pfad nicht erreichbar nach $MaxRetries Versuchen: $TestPath" -ForegroundColor Red
+					Write-Host "Letzter Fehler: $($_.Exception.Message)" -ForegroundColor Red
+					[environment]::exit(1)
+				} else {
+					Show-ErrorMessage -Title "Pfadfehler" -Message "Fehler beim Verbinden mit dem Backup-Pfad nach $MaxRetries Versuchen:`r`n$($_.Exception.Message)`r`n`r`nBitte überprüfen Sie:`r`n- Backup-Pfad ist korrekt: $TestPath`r`n- Netzwerkverbindung ist verfügbar`r`n- Benutzername und Passwort sind korrekt`r`n- Ausreichend Speicherplatz vorhanden" -IsUnattended $false
+				}
+				return $false
+			} else {
+				# Warte vor dem nächsten Versuch
+				Start-Sleep $DelaySeconds
+			}
+		}
+	}
+	return $false
+}
+
+# Hilfsfunktion für Netzwerk-Pfad-Tests
+Function Test-NetworkPath {
+	[CmdletBinding()]
+	param(
+		[string]$Path,
+		[int]$Attempt
+	)
+	
+	try {
+		# Teste Pfad mit Anmeldedaten
+		$PathTest = Test-Path $Path -ErrorAction Stop
+		
+		# Falls direkter Zugriff fehlschlägt, versuche temporäre Zuordnung
+		if (-not $PathTest) {
+			$TempDrive = "Z:"
+			# Entferne bestehende Zuordnung
+			net use $TempDrive /delete /y 2>$null
+			
+			# Zuordnung mit Anmeldedaten
+			$NetworkPassword = Convert-SecureStringToPlainText $Script:NetworkPassword
+			if ($NetworkPassword) {
+				net use $TempDrive $Path /user:$Script:NetworkUser $NetworkPassword /persistent:no | Out-Null
+			} else {
+				net use $TempDrive $Path /persistent:no | Out-Null
+			}
+			
+			if ($LASTEXITCODE -eq 0) {
+				$PathTest = Test-Path $TempDrive -ErrorAction Stop
+				# Bereinige temporäre Zuordnung
+				net use $TempDrive /delete /y 2>$null
+			} else {
+				throw "Netzwerk-Zuordnung fehlgeschlagen (ExitCode: $LASTEXITCODE)"
+			}
 		}
 		
-		If ($PathTest) {
-			If ($Unattended) {
-				Write-Host "Backup path is accessible: $TestPath"
-			}
-			Return $True
-		} Else {
-			Throw "Backup-Pfad ist nicht erreichbar"
+		return $PathTest
+	} catch {
+		# Falls Anmeldung fehlschlägt, versuche ohne Anmeldedaten
+		if ($Attempt -eq 1) {
+			return (Test-Path $Path -ErrorAction Stop)
+		} else {
+			throw
 		}
-	} Catch {
-		If ($Unattended) {
-			Write-Host "ERROR: Backup path not accessible: $TestPath"
-			Write-Host "Error: $($_.Exception.Message)"
-			[environment]::exit(1)
-		} Else {
-			$HinweisArt = "Pfadfehler"
-			$Hinweis = "Fehler beim Verbinden mit dem Backup-Pfad:`r`n$($_.Exception.Message)`r`n`r`nBitte ueberpruefen Sie:`r`n- Backup-Pfad ist korrekt: $TestPath`r`n- Netzwerkverbindung ist verfuegbar`r`n- Benutzername und Passwort sind korrekt`r`n- Ausreichend Speicherplatz vorhanden"
-			$Cancel = $False
-			$ExitOnOK = $True
-			$Sure = $False
-			Message
-		}
-		Return $False
+	}
+}
+
+# Hilfsfunktion für SecureString zu PlainText Konvertierung
+Function Convert-SecureStringToPlainText {
+	[CmdletBinding()]
+	param([SecureString]$SecureString)
+	
+	if (-not $SecureString) { return "" }
+	
+	try {
+		$BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureString)
+		$PlainText = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+		[System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
+		return $PlainText
+	} catch {
+		Write-Error "Fehler bei SecureString-Konvertierung: $($_.Exception.Message)"
+		return ""
+	}
+}
+
+# Hilfsfunktion für Fehlermeldungen
+Function Show-ErrorMessage {
+	[CmdletBinding()]
+	param(
+		[string]$Title,
+		[string]$Message,
+		[bool]$IsUnattended
+	)
+	
+	if ($IsUnattended) {
+		Write-Host "ERROR: $Message" -ForegroundColor Red
+		[environment]::exit(1)
+	} else {
+		$HinweisArt = $Title
+		$Hinweis = "$Message`r`n`r`n$Hilfe"
+		$Cancel = $false
+		$ExitOnOK = $true
+		$Sure = $false
+		Message
 	}
 }
 
@@ -433,18 +655,25 @@ Function TestBackupPath {
 Function GetAvailableDrives {
 	$Drives = @()
 	
-	# Get local fixed and removable drives (C: ausblenden)
-	Get-WmiObject -Class Win32_LogicalDisk | Where-Object { ($_.DriveType -in 2,3) -and $_.Size -gt 0 -and $_.DeviceID -ne "C:" } | ForEach-Object {
-		$FreeSpaceGB = [math]::Round($_.FreeSpace / 1GB, 1)
-		$TotalSpaceGB = [math]::Round($_.Size / 1GB, 1)
-		$Drives += [PSCustomObject]@{
-			Drive = $_.DeviceID
-			Label = $_.VolumeName
-			FreeSpace = $FreeSpaceGB
-			TotalSpace = $TotalSpaceGB
-			Type = $(if ($_.DriveType -eq 2) { "Removable Drive" } else { "Local Drive" })
-			Path = $_.DeviceID
+	# Get local fixed and removable drives (C: ausblenden) - Modernisiert mit CIM
+	try {
+		Get-CimInstance -ClassName Win32_LogicalDisk -ErrorAction Stop | 
+			Where-Object { ($_.DriveType -in $SUPPORTED_DRIVE_TYPES) -and $_.Size -gt 0 -and $_.DeviceID -ne "C:" } | 
+			ForEach-Object {
+			$FreeSpaceGB = [math]::Round($_.FreeSpace / 1GB, 1)
+			$TotalSpaceGB = [math]::Round($_.Size / 1GB, 1)
+			$Drives += [PSCustomObject]@{
+				Drive = $_.DeviceID
+				Label = $_.VolumeName ?? "(kein Name)"
+				FreeSpace = $FreeSpaceGB
+				TotalSpace = $TotalSpaceGB
+				Type = if ($_.DriveType -eq 2) { "Removable Drive" } else { "Local Drive" }
+				Path = $_.DeviceID
+			}
 		}
+	} catch {
+		Write-Error "Fehler beim Abrufen der Laufwerksinformationen: $($_.Exception.Message)"
+		return @()
 	}
 	
 	# Add network drive option only if network backup is enabled
@@ -628,24 +857,36 @@ Function RunOnceDelete {
 
 # Funktionen fuer temporaere INI-Datei mit Ausnahmen
 Function IniTempCreate {
-	IniTempDelete
-	# JSON-Datei laden und in INI-Format konvertieren
-	$JsonData = Get-Content -Path $ExclusionsJson -Raw -Encoding UTF8 | ConvertFrom-Json
+	[CmdletBinding()]
+	param()
 	
-	# INI-Format erstellen
-	$IniData = @()
-	$IniData += "[ExclusionList]"
-	$IniData += $JsonData.ExclusionList
-	$IniData += ""
-	$IniData += "[CompressionExclusionList]"
-	$IniData += $JsonData.CompressionExclusionList
-	
-	# Windows.old hinzufuegen falls gewuenscht
-	If ($Script:NoWindowsold) {
-		$IniData[1] += "`n\Windows.old"
+	try {
+		IniTempDelete
+		
+		# JSON-Datei laden und in INI-Format konvertieren
+		$JsonData = Get-Content -Path $ExclusionsJson -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+		
+		# StringBuilder für bessere Performance bei String-Operationen
+		$StringBuilder = [System.Text.StringBuilder]::new()
+		[void]$StringBuilder.AppendLine("[ExclusionList]")
+		
+		# Exclusion List hinzufügen
+		$JsonData.ExclusionList | ForEach-Object { [void]$StringBuilder.AppendLine($_) }
+		
+		# Windows.old hinzufügen falls gewünscht
+		if ($Script:NoWindowsold) {
+			[void]$StringBuilder.AppendLine("\Windows.old")
+		}
+		
+		[void]$StringBuilder.AppendLine("")
+		[void]$StringBuilder.AppendLine("[CompressionExclusionList]")
+		$JsonData.CompressionExclusionList | ForEach-Object { [void]$StringBuilder.AppendLine($_) }
+		
+		Set-Content -Path $IniTemp -Value $StringBuilder.ToString() -Encoding ASCII -ErrorAction Stop
+	} catch {
+		Write-Error "Fehler beim Erstellen der temporären INI-Datei: $($_.Exception.Message)"
+		throw
 	}
-	
-	Set-Content -Path $IniTemp -Value $IniData -Encoding ASCII
 }
 
 Function IniTempDelete {
@@ -654,19 +895,64 @@ Function IniTempDelete {
 
 # Funktionen fuer Schattenkopie-Erstellung
 Function ShadowTempCreate {
-	Ausgabe "   Schattenkopie erzeugen"
-	ShadowTempDelete
-	Start-Process $ShadowExe -ArgumentList "-p -script=${ShadowExeTemp} ${env:SystemDrive}" -NoNewWindow -Wait -RedirectStandardOutput "nul"
-	$ShadowID = ((Get-Content ${ShadowExeTemp} | Select-String "SET SHADOW_ID").Line -split "=")[-1].Trim()
-	$Script:ShadowPath = ((Get-Content ${ShadowExeTemp} | Select-String "SET SHADOW_DEVICE").Line -split "=")[-1].Trim()
-	$ShadowID | Out-File $ShadowTemp ; Remove-Item $ShadowExeTemp
+	[CmdletBinding()]
+	param()
+	
+	try {
+		Ausgabe "   Schattenkopie erzeugen"
+		ShadowTempDelete
+		
+		$ProcessParams = @{
+			FilePath = $ShadowExe
+			ArgumentList = "-p -script=${ShadowExeTemp} ${env:SystemDrive}"
+			NoNewWindow = $true
+			Wait = $true
+			RedirectStandardOutput = "nul"
+			ErrorAction = "Stop"
+		}
+		
+		Start-Process @ProcessParams
+		
+		if (-not (Test-Path $ShadowExeTemp)) {
+			throw "Shadow-Temp-Datei wurde nicht erstellt: $ShadowExeTemp"
+		}
+		
+		$ShadowContent = Get-Content $ShadowExeTemp -ErrorAction Stop
+		$ShadowIDLine = $ShadowContent | Select-String "SET SHADOW_ID" | Select-Object -First 1
+		$ShadowDeviceLine = $ShadowContent | Select-String "SET SHADOW_DEVICE" | Select-Object -First 1
+		
+		if (-not $ShadowIDLine -or -not $ShadowDeviceLine) {
+			throw "Shadow-Informationen konnten nicht aus der Temp-Datei gelesen werden"
+		}
+		
+		$ShadowID = ($ShadowIDLine.Line -split "=")[-1].Trim()
+		$Script:ShadowPath = ($ShadowDeviceLine.Line -split "=")[-1].Trim()
+		
+		$ShadowID | Out-File $ShadowTemp -ErrorAction Stop
+		Remove-Item $ShadowExeTemp -ErrorAction SilentlyContinue
+	} catch {
+		Write-Error "Fehler beim Erstellen der Schattenkopie: $($_.Exception.Message)"
+		throw
+	}
 }
 
-function ShadowTempDelete {
-	If (Test-Path $ShadowTemp) {
-		$ShadowID = Get-Content $ShadowTemp
-		vssadmin delete shadows /Shadow=$ShadowID /quiet *> $null
-		Remove-Item $ShadowTemp
+Function ShadowTempDelete {
+	[CmdletBinding()]
+	param()
+	
+	try {
+		if (Test-Path $ShadowTemp) {
+			$ShadowID = Get-Content $ShadowTemp -ErrorAction Stop
+			if ($ShadowID) {
+				vssadmin delete shadows /Shadow=$ShadowID /quiet *> $null
+				if ($LASTEXITCODE -ne 0) {
+					Write-Warning "Schattenkopie konnte nicht gelöscht werden (ExitCode: $LASTEXITCODE)"
+				}
+			}
+			Remove-Item $ShadowTemp -ErrorAction SilentlyContinue
+		}
+	} catch {
+		Write-Warning "Fehler beim Löschen der Schattenkopie: $($_.Exception.Message)"
 	}
 }
 
@@ -687,16 +973,41 @@ Function DismExclusionDelete {
 
 # Funktionen zum Erstellen/Loeschen des Scratch-Verzeichnisses
 Function ScratchDirCreate {
-	ScratchDirDelete
-	$Scratch = $null
-	If ((Get-PSDrive -Name $Env:SystemDrive[0]).Free -lt 20GB) {
-		New-Item -Path $ScratchDir -ItemType Directory -Force
-		$Scratch = "/ScratchDir:$ScratchDir"
+	[CmdletBinding()]
+	param()
+	
+	try {
+		ScratchDirDelete
+		$Script:Scratch = $null
+		
+		$SystemDrive = Get-PSDrive -Name $Env:SystemDrive[0] -ErrorAction Stop
+		$FreeSpaceGB = [math]::Round($SystemDrive.Free / 1GB, 1)
+		
+		if ($SystemDrive.Free -lt ($MIN_FREE_SPACE_GB * 1GB)) {
+			Write-Warning "Wenig freier Speicherplatz auf $($Env:SystemDrive) ($FreeSpaceGB GB). Erstelle Scratch-Verzeichnis."
+			New-Item -Path $ScratchDir -ItemType Directory -Force -ErrorAction Stop | Out-Null
+			$Script:Scratch = "/ScratchDir:$ScratchDir"
+		} else {
+			Write-Verbose "Genügend freier Speicherplatz verfügbar ($FreeSpaceGB GB). Kein Scratch-Verzeichnis erforderlich."
+		}
+	} catch {
+		Write-Error "Fehler beim Erstellen des Scratch-Verzeichnisses: $($_.Exception.Message)"
+		throw
 	}
 }
 
 Function ScratchDirDelete {
-	If (Test-Path $ScratchDir) {Remove-Item -Path $ScratchDir}
+	[CmdletBinding()]
+	param()
+	
+	try {
+		if (Test-Path $ScratchDir) {
+			Remove-Item -Path $ScratchDir -Recurse -Force -ErrorAction Stop
+			Write-Verbose "Scratch-Verzeichnis gelöscht: $ScratchDir"
+		}
+	} catch {
+		Write-Warning "Fehler beim Löschen des Scratch-Verzeichnisses: $($_.Exception.Message)"
+	}
 }
 
 # Funktionen zum Deaktivieren/Aktivieren von Windows RE (Recovery Environment)
@@ -719,25 +1030,54 @@ $Missing = ForEach ($Item in @($Icon, $eicfg, $ShadowExe)) {
 	If (-not (Test-Path $Item)) {Split-Path $Item -Leaf}}
 If ($Missing) {$Hinweis = "Es fehlen erforderliche Dateien: " + ($Missing -join ', ')}
 	
-# System-Anforderungen pruefen
-$Anforderung = "Skript funktioniert nur unter 64-Bit-Windows."
-	If (-not [System.Environment]::Is64BitOperatingSystem) {If ($Hinweis) {$Hinweis = "${Hinweis}`r`n`r`n$Anforderung"} Else {$Hinweis = $Anforderung}}
-	
-$Anforderung = "Skript funktioniert nur mit x64-Prozessoren."
-	If (-not ([System.Environment]::GetEnvironmentVariable("PROCESSOR_ARCHITECTURE") -eq "AMD64")) {If ($Hinweis) {$Hinweis = "${Hinweis}`r`n`r`n$Anforderung"} Else {$Hinweis = $Anforderung}}
-		
-$Anforderung = "Skript erfordert Windows 10/11 Version 20H2 (Build 19042) oder neuer.`r`nIhre Version: $WinVer $Version (Build $Build)."
-	If ($Build -lt 19042) {If ($Hinweis) {$Hinweis = "${Hinweis}`r`n`r`n$Anforderung"} Else {$Hinweis = $Anforderung}}
-	
-$Anforderung = "Es darf keine WSL-1-Distribution installiert sein."
-	If (get-ItemProperty -path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Lxss\*" -name flags -ErrorAction SilentlyContinue | Select-Object -Property flags | Where-Object {$_.flags -eq 7}) {If ($Hinweis) {$Hinweis = "${Hinweis}`r`n`r`n$Anforderung"} Else {$Hinweis = $Anforderung}}
+# System-Anforderungen mit verbesserter Validierung prüfen
+$Requirements = @()
 
-If ($Hinweis){ 
+# 64-Bit Windows prüfen
+if (-not [System.Environment]::Is64BitOperatingSystem) {
+	$Requirements += "Skript funktioniert nur unter 64-Bit-Windows."
+}
+
+# x64-Prozessor prüfen
+if (-not ([System.Environment]::GetEnvironmentVariable("PROCESSOR_ARCHITECTURE") -eq "AMD64")) {
+	$Requirements += "Skript funktioniert nur mit x64-Prozessoren."
+}
+
+# Windows-Version prüfen
+if ($Build -lt $REQUIRED_BUILD) {
+	$Requirements += "Skript erfordert Windows 10/11 Version 20H2 (Build $REQUIRED_BUILD) oder neuer.`r`nIhre Version: $WinVer $Version (Build $Build)."
+}
+
+# WSL-1 prüfen
+try {
+	$WSL1Found = Get-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Lxss\*" -Name flags -ErrorAction SilentlyContinue | 
+		Select-Object -Property flags | 
+		Where-Object {$_.flags -eq 7}
+	
+	if ($WSL1Found) {
+		$Requirements += "Es darf keine WSL-1-Distribution installiert sein."
+	}
+} catch {
+	Write-Warning "Konnte WSL-Status nicht prüfen: $($_.Exception.Message)"
+}
+
+# Sammle alle Anforderungsfehler
+if ($Requirements.Count -gt 0) {
+	$Hinweis = $Requirements -join "`r`n`r`n"
+}
+
+if ($Hinweis) { 
 	$HinweisArt = "Anforderung nicht erfuellt"
-	$Hinweis = "${Hinweis}`r`n`r`n$Hilfe"
-	$Cancel = $False
-	$ExitOnOK = $True
-	$Sure = $False
+	$HinweisMessage = "${Hinweis}`r`n`r`n$Hilfe"
+	$Cancel = $false
+	$ExitOnOK = $true
+	$Sure = $false
+	# Message-Funktion mit lokalen Variablen aufrufen
+	$script:HinweisArt = $HinweisArt
+	$script:Hinweis = $HinweisMessage
+	$script:Cancel = $Cancel
+	$script:ExitOnOK = $ExitOnOK
+	$script:Sure = $Sure
 	Message
 }
 
@@ -747,23 +1087,37 @@ $Hinweis = $Null
 # Alle installierten Antivirus-Produkte abrufen
 $AV = (Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntivirusProduct)
 $AVCount = ($AV).Count
+$AVFund = ""
 $AV | ForEach-Object {
 	$AVExe = [Environment]::ExpandEnvironmentVariables($_.pathToSignedReportingExe)
 	$AVPublisher = [System.Diagnostics.FileVersionInfo]::GetVersionInfo("$AVExe")
 	# Microsoft Defender nicht als zusaetzlicher Scanner zaehlen
-	If ($AVPublisher.companyname -Match "Microsoft") {$AVCount = $AVCount - 1} ELSE {$AVFund = $AVFund += "`n" + $_.displayname + "`n"}
+	if ($AVPublisher.companyname -Match "Microsoft") {
+		$AVCount = $AVCount - 1
+	} else {
+		$AVFund += "`n" + $_.displayname + "`n"
+	}
 }
 If ($AVCount -gt 0) {$Hinweis = "Nicht-Microsoft-Virenscanner gefunden: " + "`n" + $AVFund + "`nWir empfehlen, Virenscanner vor dem Sichern voruebergehend zu deaktivieren.`nDas beschleunigt das Sichern enorm und vermeidet Probleme."}
 
-If ($Hinweis){ 
+if ($Hinweis) { 
 	$HinweisArt = "Zusaetzlicher Virenscanner gefunden"
-	$Hinweis = "${Hinweis}`r`n`r`n$Hilfe"
-	$Detail = $False
-	$Cancel = $True
-	$ExitOnCancel = $True
-	$OKText = "Alles klar, weitermachen"			
-	$ExitOnOK = $False
-	$Sure = $False
+	$HinweisMessage = "${Hinweis}`r`n`r`n$Hilfe"
+	$Detail = $false
+	$Cancel = $true
+	$ExitOnCancel = $true
+	$OKText = "Alles klar, weitermachen"
+	$ExitOnOK = $false
+	$Sure = $false
+	# Message-Funktion mit Skript-Variablen aufrufen
+	$script:HinweisArt = $HinweisArt
+	$script:Hinweis = $HinweisMessage
+	$script:Detail = $Detail
+	$script:Cancel = $Cancel
+	$script:ExitOnCancel = $ExitOnCancel
+	$script:OKText = $OKText
+	$script:ExitOnOK = $ExitOnOK
+	$script:Sure = $Sure
 	Message
 }
 
@@ -772,7 +1126,7 @@ If ($Hinweis){
 # Willkommen-Dialog und GUI-Setup #
 #####################
 
-$WindowTitle = "WIMaster v0.1"
+$WindowTitle = "WIMaster"
 
 # Unbeaufsichtigter Modus oder GUI-Modus
 If ($Unattended) {
@@ -1123,64 +1477,140 @@ If (Test-Path $FreshWim) {Remove-Item $FreshWim}
 
 # DISM-Befehl zusammenstellen und ausfuehren
 
-$Action = If (Test-Path $Wim) {"/Append-Image /ImageFile:$Wim"} else {"/Capture-Image /ImageFile:$FreshWim /Compress:max"}  
+# DISM-Befehl mit Splatting und verbesserter Fehlerbehandlung zusammenstellen
+$Action = if (Test-Path $Wim) {
+    "/Append-Image /ImageFile:$Wim"
+} else {
+    "/Capture-Image /ImageFile:$FreshWim /Compress:max"
+}
 
-$ActionAll = "/CaptureDir:$Script:ShadowPath\ /Name:""$ImageName"" /Description:""$ImageName"" /ConfigFile:$IniTemp /EA /Verify /CheckIntegrity /LogPath:$LogFile /LogLevel:$LogLevel" 
+# DISM-Parameter als Array für bessere Lesbarkeit
+$DismArgs = [System.Collections.ArrayList]@()
+[void]$DismArgs.AddRange($Action.Split(' '))
+[void]$DismArgs.Add("/CaptureDir:$Script:ShadowPath\")
+[void]$DismArgs.Add("/Name:$ImageName")
+[void]$DismArgs.Add("/Description:$ImageName")
+[void]$DismArgs.Add("/ConfigFile:$IniTemp")
+[void]$DismArgs.Add("/EA")
+[void]$DismArgs.Add("/Verify")
+[void]$DismArgs.Add("/CheckIntegrity")
+[void]$DismArgs.Add("/LogPath:$LogFile")
+[void]$DismArgs.Add("/LogLevel:$LogLevel")
+if ($Script:Scratch) { [void]$DismArgs.Add($Script:Scratch) }
 
-$Process = Start-Process -FilePath $Dism -ArgumentList "$Action $ActionAll $Scratch" -NoNewWindow -PassThru -RedirectStandardOutput $DismTemp
+# Start-Process mit Splatting
+$ProcessParams = @{
+    FilePath = $Dism
+    ArgumentList = $DismArgs
+    NoNewWindow = $true
+    PassThru = $true
+    RedirectStandardOutput = $DismTemp
+    ErrorAction = "Stop"
+}
+
+try {
+    $Process = Start-Process @ProcessParams
+} catch {
+    Write-Error "Fehler beim Starten des DISM-Prozesses: $($_.Exception.Message)"
+    throw
+}
 
 # Bisherige Meldungen retten (nur im GUI-Modus)
 If (-not $Unattended) {
 	$JobSaveTickerText = $JobTicker.rtf
 }
 
-# Function to handle process completion and cleanup
+# Function to handle process completion and cleanup mit verbesserter Fehlerbehandlung
 Function ProcessCompletion {
-	param([int]$Code)
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory=$true)]
+		[int]$Code
+	)
 	
-	If (-not ($Code -eq 0)) {
-		If ($Unattended) {
-			Write-Host "ERROR: Backup failed with exit code $Code"
-			If (($Lost) -or (-not (Test-Path $PSScriptRoot))) {
-				Write-Host "ERROR: USB drive was disconnected during backup"
+	try {
+		if ($Code -ne 0) {
+			# Fehlerdiagnose
+			$ErrorDetails = Get-DismErrorDetails -ExitCode $Code
+			
+			if ($Unattended) {
+				Write-WIMasterLog -Message "Backup fehlgeschlagen mit Exit-Code $Code" -Level 'Error'
+				
+				if (($Lost) -or (-not (Test-Path $PSScriptRoot))) {
+					Write-WIMasterLog -Message "USB-Laufwerk wurde während des Backups getrennt" -Level 'Error'
+				} else {
+					Write-WIMasterLog -Message "DISM-Fehlerdetails:" -Level 'Error'
+					Write-WIMasterLog -Message $ErrorDetails -Level 'Error'
+					Write-WIMasterLog -Message "Log-Datei: $LogFile" -Level 'Info'
+				}
+				[environment]::exit(1)
 			} else {
-				Write-Host "ERROR: DISM reported the following:"
-				Write-Host ((Get-Content $DismTemp -Encoding OEM | Select-Object -Last 5)[0])
-				Write-Host ((Get-Content $DismTemp -Encoding OEM | Select-Object -Last 5)[2])
-				Write-Host "Log file: $LogFile"
+				$HinweisArt = "Backup fehlgeschlagen"
+				$ErrorMessage = if (($Lost) -or (-not (Test-Path $PSScriptRoot))) {
+					"Das Sichern hat nicht geklappt: Das USB-Laufwerk ist oder war getrennt."
+				} else {
+					"Das Sichern hat nicht geklappt. DISM meldet folgendes:`r`n`r`n$ErrorDetails`r`n`r`nLog-Datei: $LogFile"
+				}
+				
+				$Hinweis = "$ErrorMessage`r`n`r`nKlicken Sie auf OK, damit das Skript hinter sich aufräumen kann`r`n`r`n$Hilfe"
+				$Cancel = $false
+				$ExitOnOK = $false
+				$Sure = $false
+				Message
 			}
-			[environment]::exit(1)
-		} Else {
-			$HinweisArt = "Etwas ist schief gegangen"
-			If (($Lost) -or (-not (Test-Path $PSScriptRoot))) {
-				$Hinweis = "Das Sichern hat nicht geklappt: Das USB-Laufwerk ist oder war getrennt.`r`n`r`n" + 
-					"Klicken Sie auf OK, damit das Skript hinter sich aufraeumen kann`r`n`r`n" + $Hilfe
-			} else {
-				$Hinweis = "Das Sichern hat nicht geklappt. DISM meldet folgendes:`r`n`r`n" +
-				((Get-Content $DismTemp -Encoding OEM | Select-Object -Last 5)[0]) + "`r`n`r`n" +
-				((Get-Content $DismTemp -Encoding OEM | Select-Object -Last 5)[2]) + "`r`n`r`n" +
-				"Log-Datei: " + $LogFile + "`r`n`r`n" + 
-				"Klicken Sie auf OK, damit das Skript hinter sich aufraeumen kann`r`n`r`n" + $Hilfe
-			}	
-			$Cancel = $False
-			$ExitOnOK = $False
-			$Sure = $False
-			Message
 		}
+	} catch {
+		Write-WIMasterLog -Message "Fehler in ProcessCompletion: $($_.Exception.Message)" -Level 'Error'
+	} finally {
+		# Cleanup wird immer ausgeführt
+		Invoke-Cleanup
 	}
+}
+
+# Hilfsfunktion für DISM-Fehleranalyse
+Function Get-DismErrorDetails {
+	[CmdletBinding()]
+	param([int]$ExitCode)
 	
-	Fettdruck "`r`n`r`n  Nachbereitungen ...`r`n"
-	ScratchDirDelete 
-	DismExclusionDelete 
-	RunOnceDelete 
-	REEnable
-	# Defender-Reaktivierung entfernt
-	
-	# Clean up temporary network mapping if used
-	If ($Script:SelectedBackupPath -eq "Z:") {
-		net use Z: /delete /y 2>$null
-		Ausgabe "   Temporaere Netzwerkverbindung entfernt"
+	try {
+		if (Test-Path $DismTemp) {
+			$DismOutput = Get-Content $DismTemp -Encoding OEM -ErrorAction SilentlyContinue
+			$LastLines = $DismOutput | Select-Object -Last 5
+			$ErrorInfo = $LastLines | Where-Object { $_ -and $_.Trim() -ne "" } | Select-Object -First 2
+			return ($ErrorInfo -join "`r`n")
+		} else {
+			return "DISM-Ausgabedatei nicht gefunden. Exit-Code: $ExitCode"
+		}
+	} catch {
+		return "Fehler beim Lesen der DISM-Ausgabe. Exit-Code: $ExitCode"
 	}
+}
+
+# Zentrale Cleanup-Funktion
+Function Invoke-Cleanup {
+	[CmdletBinding()]
+	param()
+	
+	try {
+		Write-WIMasterLog -Message "Starte Nachbereitungen..." -Level 'Info' -Bold
+		
+		ScratchDirDelete
+		DismExclusionDelete
+		RunOnceDelete
+		REEnable
+		
+		# Temporäre Netzwerkverbindung bereinigen
+		if ($Script:SelectedBackupPath -eq "Z:") {
+			net use Z: /delete /y 2>$null
+			Write-WIMasterLog -Message "Temporäre Netzwerkverbindung entfernt" -Level 'Info'
+		}
+		
+	} catch {
+		Write-WIMasterLog -Message "Fehler während Cleanup: $($_.Exception.Message)" -Level 'Warning'
+	}
+}
+	
+		# Cleanup erfolgt in Invoke-Cleanup
 
 	# Stoppe Stoppuhr
 	$stopwatch.Stop()
@@ -1203,12 +1633,15 @@ Function ProcessCompletion {
 	}
 	Fettdruck "`r`n Fertig!"
 
-	# Falls Shutdown gewuenscht: Countdown starten
-	If ($Script:Shutdown) {shutdown /s /t 60}
-	
-	If (-not $Unattended) {
-		# "Fertig"-Knopf
-		$JobReadyButton.Enabled = $true
+		# Falls Shutdown gewuenscht: Countdown starten
+		if ($Script:Shutdown) {shutdown /s /t 60}
+		
+		if (-not $Unattended) {
+			# "Fertig"-Knopf
+			$JobReadyButton.Enabled = $true
+		}
+	} catch {
+		Write-WIMasterLog -Message "Fehler in erfolgreicher Backup-Abschluss: $($_.Exception.Message)" -Level 'Warning'
 	}
 }
 
