@@ -2,7 +2,7 @@
 #Requires -Version 3.0
 
 # Disk Management Tools - GUI Version
-# Erstellt von Joachim Mild <joe@root-files.net>
+# Erstellt von Joachim Mild <joe@devops-geek.net>
 # Basierend auf disk-tools.cmd
 
 # Zeichenkodierung für korrekte Umlaut-Darstellung setzen

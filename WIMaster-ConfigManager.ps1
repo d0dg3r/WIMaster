@@ -8,7 +8,7 @@
   Backup-Optionen und Standard-Backup-Pfad.
 .NOTES
   Version:        0.1
-  Autor:          Joachim Mild <joe@root-files.net>
+  Autor:          Joachim Mild <joe@devops-geek.net>
   Erstellungsdatum: 2025-01-27
  #>
 

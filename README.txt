@@ -297,4 +297,4 @@ DANKSAGUNGEN
 
 - Original c't-WIMaster-Skript von Axel Vahldiek
 - c't-Magazin (heise.de) für die ursprüngliche Implementierung
-- Weiterentwicklung: Joachim Mild <joe@root-files.net>
+- Weiterentwicklung: Joachim Mild <joe@devops-geek.net>

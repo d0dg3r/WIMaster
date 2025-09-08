@@ -30,7 +30,7 @@ foreach ($arg in $args) {
 .NOTES
   Version:        0.1
   Original Autor: Axel Vahldiek <axv@ct.de> (c't-WIMage)
-  Weiterentwicklung: Joachim Mild <joe@root-files.net>
+  Weiterentwicklung: Joachim Mild <joe@devops-geek.net>
   Erweiterungen:  Netzwerk-Support, unbeaufsichtigter Modus, verbesserte Konfiguration
   Erstellungsdatum: 2025-01-27
  #>

@@ -2,7 +2,7 @@
 #Requires -Version 3.0
 
 # Windows Setup & Restore Menu - GUI Version
-# Erstellt von Joachim Mild <joe@root-files.net>
+# Erstellt von Joachim Mild <joe@devops-geek.net>
 # Basierend auf menu.cmd
 
 # Zeichenkodierung für korrekte Umlaut-Darstellung setzen

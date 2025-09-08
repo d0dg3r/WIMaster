@@ -2,7 +2,7 @@
 #Requires -Version 3.0
 
 # SMB Image Restore - GUI Version
-# Erstellt von Joachim Mild <joe@root-files.net>
+# Erstellt von Joachim Mild <joe@devops-geek.net>
 # Basierend auf smb-restore.cmd
 
 # Zeichenkodierung für korrekte Umlaut-Darstellung setzen
