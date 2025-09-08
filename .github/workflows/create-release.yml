@@ -54,14 +54,13 @@ jobs:
           }
         }
         
-        if (-not $CscPath) {
+        # Always prefer .NET CLI if available (more reliable in GitHub Actions)
+        if (Get-Command dotnet -ErrorAction SilentlyContinue) {
+          Write-Host "✅ .NET CLI available - using as primary compiler"
+          echo "USE_DOTNET_CLI=true" >> $env:GITHUB_ENV
+        } elseif (-not $CscPath) {
           Write-Host "❌ C# compiler not found in standard locations"
-          if (Get-Command dotnet -ErrorAction SilentlyContinue) {
-            Write-Host "🔄 Using .NET CLI as fallback..."
-            echo "USE_DOTNET_CLI=true" >> $env:GITHUB_ENV
-          } else {
-            throw "No C# compiler found and .NET CLI not available"
-          }
+          throw "No C# compiler found and .NET CLI not available"
         } else {
           $CscDir = Split-Path $CscPath -Parent
           $env:PATH = "$CscDir;$env:PATH"
@@ -115,11 +114,31 @@ jobs:
           
           # Find .NET Framework reference assemblies
           $NetFxPath = "${env:ProgramFiles(x86)}\Reference Assemblies\Microsoft\Framework\.NETFramework"
-          $LatestFramework = Get-ChildItem $NetFxPath | Where-Object {$_.Name -match "^v4\."} | Sort-Object Name -Descending | Select-Object -First 1
-          $FrameworkPath = $LatestFramework.FullName
           
-          Write-Host "📚 Using .NET Framework: $($LatestFramework.Name)"
-          Write-Host "📂 Framework path: $FrameworkPath"
+          Write-Host "🔍 Searching for .NET Framework in: $NetFxPath"
+          
+          if (Test-Path $NetFxPath) {
+            $AvailableFrameworks = Get-ChildItem $NetFxPath | Where-Object {$_.Name -match "^v4\."} | Sort-Object Name -Descending
+            Write-Host "📋 Available frameworks: $($AvailableFrameworks.Name -join ', ')"
+            
+            $LatestFramework = $AvailableFrameworks | Select-Object -First 1
+            $FrameworkPath = $LatestFramework.FullName
+            
+            Write-Host "📚 Using .NET Framework: $($LatestFramework.Name)"
+            Write-Host "📂 Framework path: $FrameworkPath"
+            
+            # Verify System.Windows.Forms.dll exists
+            $WinFormsPath = "$FrameworkPath\System.Windows.Forms.dll"
+            if (-not (Test-Path $WinFormsPath)) {
+              Write-Host "❌ System.Windows.Forms.dll not found at: $WinFormsPath"
+              throw "Required .NET Framework assembly not found"
+            } else {
+              Write-Host "✅ Found System.Windows.Forms.dll"
+            }
+          } else {
+            Write-Host "❌ .NET Framework Reference Assemblies not found"
+            throw ".NET Framework Reference Assemblies directory not found"
+          }
           
           # Find Microsoft.Win32.Registry.dll location
           $RegistryDll = $null
