@@ -64,7 +64,7 @@ jobs:
           # Fallback: Try to use dotnet
           if (Get-Command dotnet -ErrorAction SilentlyContinue) {
             Write-Host "🔄 Trying .NET CLI as fallback..."
-            $env:USE_DOTNET_CLI = "true"
+            echo "USE_DOTNET_CLI=true" >> $env:GITHUB_ENV
           } else {
             throw "No C# compiler found and .NET CLI not available"
           }
@@ -73,9 +73,13 @@ jobs:
           $CscDir = Split-Path $CscPath -Parent
           $env:PATH = "$CscDir;$env:PATH"
           Write-Host "🔧 Added to PATH: $CscDir"
+          Write-Host "🔧 Full compiler path: $CscPath"
           
           # Test compiler
           & $CscPath /help | Select-Object -First 3
+          
+          # Store full path for later use in GitHub Actions
+          echo "CSC_FULL_PATH=$CscPath" >> $env:GITHUB_ENV
         }
       shell: pwsh
       
@@ -147,8 +151,11 @@ jobs:
             $Args = @($IconParam) + $Args
           }
           
-          Write-Host "Command: csc $($Args -join ' ')"
-          & csc @Args
+          # Use full path if available, otherwise try csc in PATH
+          $CscCommand = if ($env:CSC_FULL_PATH) { $env:CSC_FULL_PATH } else { "csc" }
+          Write-Host "Command: $CscCommand $($Args -join ' ')"
+          
+          & $CscCommand @Args
         }
         
         if ($LASTEXITCODE -eq 0) {
