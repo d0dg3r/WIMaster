@@ -268,7 +268,13 @@ Für Probleme und Fragen:
 
 ## Lizenz
 
-Dieses Skript basiert auf c't-WIMage von Axel Vahldiek. Bitte beachten Sie die ursprüngliche Dokumentation unter ct.de/wimage für Lizenzinformationen.
+Dieses Projekt steht unter der GNU General Public License v3.0 (GPL-3.0).
+
+Sie können eine Kopie der Lizenz unter folgender Adresse finden:
+https://www.gnu.org/licenses/gpl-3.0.html
+
+Das ursprüngliche c't-WIMage-Skript von Axel Vahldiek behält seine ursprüngliche Lizenz. 
+Weitere Informationen finden Sie unter ct.de/wimage.
 
 ## Danksagungen
 
