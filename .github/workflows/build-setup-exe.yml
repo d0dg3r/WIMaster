@@ -109,23 +109,24 @@ jobs:
           Write-Host "Using .NET CLI for compilation..."
           
           # Create temporary csproj file for .NET CLI
-          $CsprojContent = @"
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net48</TargetFramework>
-    <UseWindowsForms>true</UseWindowsForms>
-    <AssemblyName>Setup</AssemblyName>
-  </PropertyGroup>
-  <ItemGroup>
-    <Reference Include="Microsoft.Win32.Registry" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Include="build-tools/WIMaster-Setup.cs" />
-  </ItemGroup>
-</Project>
-"@
-          $CsprojContent | Out-File -FilePath "TempSetup.csproj" -Encoding UTF8
+          $CsprojLines = @(
+            '<Project Sdk="Microsoft.NET.Sdk">',
+            '  <PropertyGroup>',
+            '    <OutputType>WinExe</OutputType>',
+            '    <TargetFramework>net48</TargetFramework>',
+            '    <UseWindowsForms>true</UseWindowsForms>',
+            '    <AssemblyName>Setup</AssemblyName>',
+            '  </PropertyGroup>',
+            '  <ItemGroup>',
+            '    <Reference Include="Microsoft.Win32.Registry" />',
+            '  </ItemGroup>',
+            '  <ItemGroup>',
+            '    <Compile Include="build-tools/WIMaster-Setup.cs" />',
+            '  </ItemGroup>',
+            '</Project>'
+          )
+          
+          $CsprojLines | Out-File -FilePath "TempSetup.csproj" -Encoding UTF8
           
           dotnet build TempSetup.csproj -c Release -o .
           Remove-Item "TempSetup.csproj" -Force
