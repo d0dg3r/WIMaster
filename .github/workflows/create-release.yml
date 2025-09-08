@@ -70,4 +70,4 @@ jobs:
         draft: false
         prerelease: false
       env:
-        GITHUB_TOKEN: ${{ GIT_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
