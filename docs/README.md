@@ -25,23 +25,19 @@ Dieser Ordner enthält alle zusätzlichen Dokumentationsdateien für WIMaster.
 Die primäre Dokumentation befindet sich in der Haupt-README.md im Root-Verzeichnis:
 - [`../README.md`](../README.md) - Hauptdokumentation für WIMaster
 
-## 🛠️ **Build-Tools Dokumentation**
+## 🛠️ **GitHub Actions**
 
-Für detaillierte Informationen zu den Build-Tools:
-- [`../build-tools/README.md`](../build-tools/README.md) - Build-Tools Übersicht
-- [`../build-tools/README-Setup.md`](../build-tools/README-Setup.md) - Setup.exe Dokumentation
-- [`../build-tools/Setup-Integration.md`](../build-tools/Setup-Integration.md) - Integration-Leitfaden
-- [`../build-tools/GitHub-Actions-Setup.md`](../build-tools/GitHub-Actions-Setup.md) - GitHub Actions
+WIMaster verwendet GitHub Actions für automatische Builds und Releases:
+- Automatische Zip-Erstellung bei Push/PR 
+- Release-Packages bei Git-Tags
+- Keine Setup.exe-Generierung mehr
 
 ## 📋 **Dokumentations-Index**
 
 | Thema | Datei | Format | Zielgruppe |
 |-------|-------|--------|------------|
 | **Hauptdokumentation** | `../README.md` | Markdown | Alle Benutzer |
-| **Build-System** | `README-Build-System.md` | Markdown | Entwickler |
 | **Password-Tools** | `README-PasswordSetter.*` | Mehrere | End-Benutzer |
-| **Setup.exe** | `../build-tools/README-Setup.md` | Markdown | Entwickler |
-| **GitHub Actions** | `../build-tools/GitHub-Actions-Setup.md` | Markdown | DevOps |
 | **Legacy** | `README.rtf` / `README.txt` | RTF/Text | Archiv |
 
 ## 🎯 **Schnellzugriff**
@@ -49,10 +45,8 @@ Für detaillierte Informationen zu den Build-Tools:
 ### **Ich möchte...**
 
 - **WIMaster verwenden** → [`../README.md`](../README.md)
-- **Setup.exe erstellen** → [`../build-tools/README-Setup.md`](../build-tools/README-Setup.md)
-- **Build-System verstehen** → [`README-Build-System.md`](README-Build-System.md)
 - **Password-Tools verwenden** → [`README-PasswordSetter.md`](README-PasswordSetter.md)
-- **GitHub Actions konfigurieren** → [`../build-tools/GitHub-Actions-Setup.md`](../build-tools/GitHub-Actions-Setup.md)
+- **GitHub Actions verstehen** → Siehe `.github/workflows/` Verzeichnis
 
 ---
 

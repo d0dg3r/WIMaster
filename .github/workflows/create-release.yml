@@ -8,267 +8,18 @@ on:
 
 permissions:
   contents: write  # Required for creating releases
-  actions: read    # Required for downloading artifacts
 
 jobs:
-  build-setup-exe:
-    runs-on: windows-2022  # Specify Windows Server 2022 explicitly
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Setup .NET Framework
-      uses: microsoft/setup-msbuild@v1.1
-      with:
-        vs-version: latest
-    
-    - name: Find and setup C# compiler
-      run: |
-        Write-Host "🔍 Searching for C# compiler..."
-        
-        # Mögliche Compiler-Pfade in Windows-GitHub-Runnern
-        $PossiblePaths = @(
-          "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\Roslyn\csc.exe",
-          "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\Roslyn\csc.exe",
-          "${env:ProgramFiles}\dotnet\sdk\*\Roslyn\bincore\csc.dll",
-          "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\BuildTools\MSBuild\Current\Bin\Roslyn\csc.exe",
-          "${env:ProgramFiles}\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\Roslyn\csc.exe"
-        )
-        
-        # Windows SDK Pfade
-        $WindowsKitsPaths = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\NETFXSDK\*\bin\NETFX*\x64\csc.exe" -ErrorAction SilentlyContinue
-        if ($WindowsKitsPaths) {
-          $PossiblePaths += $WindowsKitsPaths.FullName
-        }
-        
-        # .NET Framework Compiler im Windows SDK
-        $NetFxPaths = Get-ChildItem "${env:ProgramFiles(x86)}\Microsoft SDKs\Windows\*\bin\NETFX*\x64\csc.exe" -ErrorAction SilentlyContinue
-        if ($NetFxPaths) {
-          $PossiblePaths += $NetFxPaths.FullName
-        }
-        
-        $CscPath = $null
-        foreach ($Path in $PossiblePaths) {
-          $ResolvedPaths = Resolve-Path $Path -ErrorAction SilentlyContinue
-          if ($ResolvedPaths) {
-            $CscPath = $ResolvedPaths[0].Path
-            Write-Host "✅ Found C# compiler: $CscPath"
-            break
-          }
-        }
-        
-        # Always prefer .NET CLI if available (more reliable in GitHub Actions)
-        if (Get-Command dotnet -ErrorAction SilentlyContinue) {
-          Write-Host "✅ .NET CLI available - using as primary compiler"
-          echo "USE_DOTNET_CLI=true" >> $env:GITHUB_ENV
-        } elseif (-not $CscPath) {
-          Write-Host "❌ C# compiler not found in standard locations"
-          throw "No C# compiler found and .NET CLI not available"
-        } else {
-          $CscDir = Split-Path $CscPath -Parent
-          $env:PATH = "$CscDir;$env:PATH"
-          Write-Host "🔧 Added to PATH: $CscDir"
-          Write-Host "🔧 Full compiler path: $CscPath"
-          
-          # Store full path for later use in GitHub Actions
-          echo "CSC_FULL_PATH=$CscPath" >> $env:GITHUB_ENV
-        }
-      shell: pwsh
-    
-    - name: Build Setup.exe
-      run: |
-        # Icon parameter if available
-        $IconParam = ""
-        if (Test-Path "WIMaster_Ico.ico") {
-          $IconParam = '/win32icon:"WIMaster_Ico.ico"'
-          Write-Host "✅ Using icon: WIMaster_Ico.ico"
-        }
-        
-        Write-Host "🔨 Compiling Setup.exe for release..."
-        
-        if ($env:USE_DOTNET_CLI -eq "true") {
-          Write-Host "Using .NET CLI for compilation..."
-          
-          # Create temporary csproj file for .NET CLI
-          $CsprojLines = @(
-            '<Project Sdk="Microsoft.NET.Sdk">',
-            '  <PropertyGroup>',
-            '    <OutputType>WinExe</OutputType>',
-            '    <TargetFramework>net48</TargetFramework>',
-            '    <UseWindowsForms>true</UseWindowsForms>',
-            '    <AssemblyName>Setup</AssemblyName>',
-            '    <NoWarn>MSB3245</NoWarn>',
-            '  </PropertyGroup>',
-            '  <ItemGroup>',
-            '    <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />',
-            '  </ItemGroup>',
-            '  <ItemGroup>',
-            '    <Compile Include="build-tools/WIMaster-Setup.cs" />',
-            '  </ItemGroup>',
-            '</Project>'
-          )
-          
-          $CsprojLines | Out-File -FilePath "TempSetup.csproj" -Encoding UTF8
-          
-          dotnet build TempSetup.csproj -c Release -o .
-          Remove-Item "TempSetup.csproj" -Force
-          
-        } else {
-          # Use traditional csc.exe with full .NET Framework references
-          
-          # Find .NET Framework reference assemblies
-          $NetFxPath = "${env:ProgramFiles(x86)}\Reference Assemblies\Microsoft\Framework\.NETFramework"
-          
-          Write-Host "🔍 Searching for .NET Framework in: $NetFxPath"
-          
-          if (Test-Path $NetFxPath) {
-            $AvailableFrameworks = Get-ChildItem $NetFxPath | Where-Object {$_.Name -match "^v4\."} | Sort-Object Name -Descending
-            Write-Host "📋 Available frameworks: $($AvailableFrameworks.Name -join ', ')"
-            
-            $LatestFramework = $AvailableFrameworks | Select-Object -First 1
-            $FrameworkPath = $LatestFramework.FullName
-            
-            Write-Host "📚 Using .NET Framework: $($LatestFramework.Name)"
-            Write-Host "📂 Framework path: $FrameworkPath"
-            
-            # Verify System.Windows.Forms.dll exists
-            $WinFormsPath = "$FrameworkPath\System.Windows.Forms.dll"
-            if (-not (Test-Path $WinFormsPath)) {
-              Write-Host "❌ System.Windows.Forms.dll not found at: $WinFormsPath"
-              throw "Required .NET Framework assembly not found"
-            } else {
-              Write-Host "✅ Found System.Windows.Forms.dll"
-            }
-          } else {
-            Write-Host "❌ .NET Framework Reference Assemblies not found"
-            throw ".NET Framework Reference Assemblies directory not found"
-          }
-          
-          # Find Microsoft.Win32.Registry.dll location
-          $RegistryDll = $null
-          $PossibleRegistryPaths = @(
-            "$FrameworkPath\Facades\Microsoft.Win32.Registry.dll",
-            "$FrameworkPath\Microsoft.Win32.Registry.dll",
-            "${env:ProgramFiles}\dotnet\shared\Microsoft.NETCore.App\*\Microsoft.Win32.Registry.dll"
-          )
-          
-          foreach ($Path in $PossibleRegistryPaths) {
-            $ResolvedPaths = Resolve-Path $Path -ErrorAction SilentlyContinue
-            if ($ResolvedPaths) {
-              $RegistryDll = $ResolvedPaths[0].Path
-              Write-Host "📦 Found Registry DLL: $RegistryDll"
-              break
-            }
-          }
-          
-          if (-not $RegistryDll) {
-            Write-Host "⚠️  Microsoft.Win32.Registry.dll not found, compiling without it"
-            $Args = @(
-              "/target:winexe",
-              "/platform:anycpu", 
-              "/optimize+",
-              "/reference:$FrameworkPath\System.Windows.Forms.dll",
-              "/out:Setup.exe",
-              "build-tools/WIMaster-Setup.cs"
-            )
-          } else {
-            $Args = @(
-              "/target:winexe",
-              "/platform:anycpu", 
-              "/optimize+",
-              "/reference:$FrameworkPath\System.Windows.Forms.dll",
-              "/reference:$RegistryDll",
-              "/out:Setup.exe",
-              "build-tools/WIMaster-Setup.cs"
-            )
-          }
-          
-          if ($IconParam) {
-            $Args = @($IconParam) + $Args
-          }
-          
-          # Use full path if available, otherwise try csc in PATH
-          $CscCommand = if ($env:CSC_FULL_PATH) { $env:CSC_FULL_PATH } else { "csc" }
-          Write-Host "Command: $CscCommand $($Args -join ' ')"
-          
-          & $CscCommand @Args
-        }
-        
-        if ($LASTEXITCODE -eq 0) {
-          Write-Host "✅ Setup.exe successfully compiled!"
-          $FileInfo = Get-Item "Setup.exe"
-          Write-Host "📁 File size: $($FileInfo.Length) bytes"
-        } else {
-          Write-Error "❌ Compilation failed"
-          exit 1
-        }
-      shell: pwsh
-      
-    - name: Upload Setup.exe artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: setup-exe
-        path: Setup.exe
-        retention-days: 1
-        compression-level: 6
-        if-no-files-found: error
-
   create-release:
     runs-on: ubuntu-latest
-    needs: build-setup-exe
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
-    - name: Download Setup.exe
-      uses: actions/download-artifact@v4
-      with:
-        name: setup-exe
-        path: .
-      continue-on-error: false
-      
-    - name: Wait for artifact availability
-      run: |
-        $maxRetries = 10
-        $retryCount = 0
-        
-        while (-not (Test-Path "Setup.exe") -and $retryCount -lt $maxRetries) {
-          Write-Host "⏳ Waiting for Setup.exe artifact... (Attempt $($retryCount + 1)/$maxRetries)"
-          Start-Sleep -Seconds 5
-          $retryCount++
-        }
-        
-        if (-not (Test-Path "Setup.exe")) {
-          Write-Host "❌ Setup.exe artifact not found after $maxRetries retries"
-          exit 1
-        }
-        
-        Write-Host "✅ Setup.exe artifact found"
-      shell: pwsh
-      
-    - name: Verify Setup.exe
-      run: |
-        if [ -f "Setup.exe" ]; then
-          echo "✅ Setup.exe downloaded successfully"
-          ls -la Setup.exe
-        else
-          echo "❌ Setup.exe not found!"
-          exit 1
-        fi
       
     - name: Create release zip
       run: |
         echo "📦 Creating WIMaster release package..."
-        
-        # Verify Setup.exe exists
-        if [ ! -f "Setup.exe" ]; then
-          echo "❌ Setup.exe not found - cannot create release!"
-          exit 1
-        fi
-        
-        echo "✅ Setup.exe found ($(stat -c%s Setup.exe) bytes)"
         
         # Create a temporary directory for the release files
         mkdir -p release-temp
@@ -284,14 +35,9 @@ jobs:
                   --exclude='release-temp' \
                   ./ release-temp/
         
-        # Ensure Setup.exe is in the release package
-        echo "📋 Ensuring Setup.exe is included..."
-        cp Setup.exe release-temp/
-        
         # Verify content before zipping
         echo "📋 Release package contents:"
         ls -la release-temp/ | head -20
-        echo "📊 Setup.exe in package: $(stat -c%s release-temp/Setup.exe) bytes"
         
         # Create the zip file
         echo "🗜️ Creating zip archive..."
@@ -329,9 +75,9 @@ jobs:
           exit 1
         fi
         
-        # Check zip file size (should be > 1MB for a complete release)
+        # Check zip file size (should be > 500KB for a complete release)
         zip_size=$(stat -c%s WIMaster-release.zip)
-        if [ $zip_size -lt 1048576 ]; then
+        if [ $zip_size -lt 512000 ]; then
           echo "❌ WIMaster-release.zip too small ($zip_size bytes) - incomplete package!"
           exit 1
         fi
@@ -348,32 +94,30 @@ jobs:
         body: |
           ## WIMaster Release ${{ steps.tag.outputs.tag_name }}
           
-          This release contains all WIMaster files packaged for distribution with the new Setup.exe!
+          This release contains all WIMaster files packaged for distribution.
           
           ### What's Included:
-          - **Setup.exe** - New Windows executable with automatic UAC elevation
           - All batch and PowerShell scripts
           - Configuration files and templates  
           - Documentation files
           - Utility executables
+          - Build tools and setup scripts
           
-          ### Installation (Recommended):
+          ### Installation:
           1. Download the WIMaster-release.zip file
           2. Extract to your desired location
-          3. **Run Setup.exe** (automatically requests admin rights)
-          
-          ### Alternative Installation:
-          - Run WIMaster-Setup.bat manually "as administrator"
-          
-          ### New Features:
-          - ✅ **Setup.exe** - No more manual "Run as Administrator" required
-          - ✅ Automatic UAC elevation
-          - ✅ Enhanced error handling
-          - ✅ System requirements validation
+          3. Run WIMaster-Setup.bat "as administrator"
           
           ### Package Contents:
-          - Complete WIMaster toolkit with Setup.exe
-          - Size: $(stat -c%s WIMaster-release.zip 2>/dev/null || echo "Unknown") bytes
+          - Complete WIMaster toolkit
+          - All necessary configuration files
+          - Setup and build tools
+          
+          ### Usage:
+          After installation, you can run WIMaster using:
+          - `Start-WIMaster.bat` - Main interface
+          - `Start-WIMaster-Menu.bat` - Menu-driven interface
+          - `Start-WIMaster-Unattended.bat` - Automated mode
         files: |
           WIMaster-release.zip
         draft: false

@@ -17,6 +17,8 @@ jobs:
       
     - name: Create build zip
       run: |
+        echo "📦 Creating WIMaster build package..."
+        
         # Create a temporary directory for the build files
         mkdir -p build-temp
         
@@ -39,6 +41,7 @@ jobs:
         cp WIMaster-build-${TIMESTAMP}.zip WIMaster-latest.zip
         
         # Show file info
+        echo "✅ Created build packages:"
         ls -la WIMaster-*.zip
     
     - name: Upload build artifact
