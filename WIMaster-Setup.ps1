@@ -24,33 +24,69 @@ $HilfeGUI = " Entwickelt von Joachim Mild <joe@devops-geek.net>`nBasierend auf c
 ##############################
 
 # Von WIMaster-Setup benoetigt
+# Erkenne ob Development-Umgebung oder USB-Stick
 
-$Batch = Join-Path $PSScriptRoot "\WIMaster.bat"
-$Skript = Join-Path $PSScriptRoot "\WIMaster.ps1"
-$ConfigJson = Join-Path $PSScriptRoot "\WIMaster-Config.json"
-$ExclusionsJson = Join-Path $PSScriptRoot "\WIMaster_Exclusions.json"
+$IsDevelopment = Test-Path (Join-Path $PSScriptRoot "bat")
+If ($IsDevelopment) {
+    # Development-Pfade (organisierte Struktur)
+    $Batch = Join-Path $PSScriptRoot "\bat\WIMaster.bat"
+    $Skript = Join-Path $PSScriptRoot "\ps1\WIMaster.ps1"
+    $ConfigJson = Join-Path $PSScriptRoot "\config\WIMaster-Config.json"
+    $ExclusionsJson = Join-Path $PSScriptRoot "\config\WIMaster_Exclusions.json"
+    $EIcfg = Join-Path $PSScriptRoot "\templates\ei.cfg"
+    $ShadowExe = Join-Path $PSScriptRoot "\tools\vshadow.exe"
+} Else {
+    # USB-Stick Pfade (WIMaster-Unterverzeichnis)
+    $Batch = Join-Path $PSScriptRoot "..\WIMaster.bat"
+    $Skript = Join-Path $PSScriptRoot "WIMaster.ps1"
+    $ConfigJson = Join-Path $PSScriptRoot "WIMaster-Config.json"
+    $ExclusionsJson = Join-Path $PSScriptRoot "WIMaster_Exclusions.json"
+    $EIcfg = Join-Path $PSScriptRoot "..\Sources\ei.cfg"
+    $ShadowExe = Join-Path $PSScriptRoot "vshadow.exe"
+}
+
+# Gemeinsame Dateien
 $Icon = Join-Path $PSScriptRoot "\WIMaster_Ico.ico"
 $Autorun = Join-Path $PSScriptRoot "\autorun.inf"
-$EIcfg = Join-Path $PSScriptRoot "\ei.cfg"
-$ShadowExe = Join-Path $PSScriptRoot "\vshadow.exe"
-$SpeedCheckps1 = Join-Path $PSScriptRoot "\WIMaster-USBSpeedCheck.ps1"
-$SpeedCheckbat = Join-Path $PSScriptRoot "\WIMaster-USBSpeedCheck.bat"
-$ConfigManager = Join-Path $PSScriptRoot "\WIMaster-ConfigManager.ps1"
-$ConfigManagerBat = Join-Path $PSScriptRoot "\ConfigManager.bat"
-$StartBat = Join-Path $PSScriptRoot "\Start-WIMaster.bat"
-$StartUnattendedBat = Join-Path $PSScriptRoot "\Start-WIMaster-Unattended.bat"
-$EncryptPasswordPs1 = Join-Path $PSScriptRoot "\EncryptPassword.ps1"
-$EncryptPasswordBat = Join-Path $PSScriptRoot "\EncryptPassword.bat"
+If ($IsDevelopment) {
+    # Development-Pfade
+    $SpeedCheckps1 = Join-Path $PSScriptRoot "\ps1\WIMaster-USBSpeedCheck.ps1"
+    $SpeedCheckbat = Join-Path $PSScriptRoot "\bat\WIMaster-USBSpeedCheck.bat"
+    $ConfigManager = Join-Path $PSScriptRoot "\ps1\WIMaster-ConfigManager.ps1"
+    $ConfigManagerBat = Join-Path $PSScriptRoot "\bat\ConfigManager.bat"
+    $StartBat = Join-Path $PSScriptRoot "\bat\Start-WIMaster.bat"
+    $StartUnattendedBat = Join-Path $PSScriptRoot "\bat\Start-WIMaster-Unattended.bat"
+    $EncryptPasswordPs1 = Join-Path $PSScriptRoot "\ps1\EncryptPassword.ps1"
+    $EncryptPasswordBat = Join-Path $PSScriptRoot "\bat\EncryptPassword.bat"
+    $MenuCmd = Join-Path $PSScriptRoot "\menu\menu.cmd"
+    $MenuPs1 = Join-Path $PSScriptRoot "\ps1\WIMaster-Menu.ps1"
+    $StartMenuBat = Join-Path $PSScriptRoot "\bat\Start-WIMaster-Menu.bat"
+    $PasswordReadmeTxt = Join-Path $PSScriptRoot "\docs\README-PasswordSetter.txt"
+    $PasswordReadmeRtf = Join-Path $PSScriptRoot "\docs\README-PasswordSetter.rtf"
+    $PasswordReadmeMd = Join-Path $PSScriptRoot "\docs\README-PasswordSetter.md"
+} Else {
+    # USB-Stick Pfade
+    $SpeedCheckps1 = Join-Path $PSScriptRoot "WIMaster-USBSpeedCheck.ps1"
+    $SpeedCheckbat = Join-Path $PSScriptRoot "..\WIMaster-USBSpeedCheck.bat"
+    $ConfigManager = Join-Path $PSScriptRoot "WIMaster-ConfigManager.ps1"
+    $ConfigManagerBat = Join-Path $PSScriptRoot "..\ConfigManager.bat"
+    $StartBat = Join-Path $PSScriptRoot "..\Start-WIMaster.bat"
+    $StartUnattendedBat = Join-Path $PSScriptRoot "..\Start-WIMaster-Unattended.bat"
+    $EncryptPasswordPs1 = Join-Path $PSScriptRoot "EncryptPassword.ps1"
+    $EncryptPasswordBat = Join-Path $PSScriptRoot "..\EncryptPassword.bat"
+    $MenuCmd = Join-Path $PSScriptRoot "..\menu.cmd"
+    $MenuPs1 = Join-Path $PSScriptRoot "WIMaster-Menu.ps1"
+    $StartMenuBat = Join-Path $PSScriptRoot "..\Start-WIMaster-Menu.bat"
+    $PasswordReadmeTxt = Join-Path $PSScriptRoot "README-PasswordSetter.txt"
+    $PasswordReadmeRtf = Join-Path $PSScriptRoot "README-PasswordSetter.rtf"
+    $PasswordReadmeMd = Join-Path $PSScriptRoot "README-PasswordSetter.md"
+}
+# Setup-Dateien sind in beiden Fällen am gleichen Ort
 $SetupBat = Join-Path $PSScriptRoot "\WIMaster-Setup.bat"
 $SetupPs1 = Join-Path $PSScriptRoot "\WIMaster-Setup.ps1"
-$PasswordReadmeTxt = Join-Path $PSScriptRoot "\README-PasswordSetter.txt"
-$PasswordReadmeRtf = Join-Path $PSScriptRoot "\README-PasswordSetter.rtf"
-$PasswordReadmeMd = Join-Path $PSScriptRoot "\README-PasswordSetter.md"
 
 # Neue Scripts fuer erweiterte USB-Stick Funktionalitaet
-$MenuCmd = Join-Path $PSScriptRoot "\menu.cmd"
-$MenuPs1 = Join-Path $PSScriptRoot "\WIMaster-Menu.ps1"
-$StartMenuBat = Join-Path $PSScriptRoot "\Start-WIMaster-Menu.bat"
+# MenuCmd wird in der IsDevelopment-Sektion definiert
 $SmbRestoreCmd = Join-Path $PSScriptRoot "\Scripts\smb-restore.cmd"
 $NetworkToolsCmd = Join-Path $PSScriptRoot "\Scripts\network-tools.cmd"
 $DiskToolsCmd = Join-Path $PSScriptRoot "\Scripts\disk-tools.cmd"
@@ -290,9 +326,16 @@ Function UpdateDriveList {
 $Hinweis = $Null
 
 # Vollstaendigkeit der Dateien 
+# Prüfe nur die wichtigsten Dateien
 
-$Missing = ForEach ($Item in @($Batch, $Skript, $ConfigJson, $ExclusionsJson, $Icon, $Autorun, $EIcfg, $ShadowExe, $SpeedCheckps1, $SpeedCheckbat, $ConfigManager, $ConfigManagerBat, $StartBat, $StartUnattendedBat, $EncryptPasswordPs1, $EncryptPasswordBat, $SetupBat, $SetupPs1, $PasswordReadmeTxt, $PasswordReadmeRtf, $PasswordReadmeMd, $MenuPs1, $StartMenuBat)) {
-	If (-not (Test-Path $Item)) {Split-Path $Item -Leaf}}
+$Missing = @()
+# Kritische Dateien prüfen
+If (-not (Test-Path $Skript)) { $Missing += "WIMaster.ps1" }
+If (-not (Test-Path $ShadowExe)) { $Missing += "vshadow.exe" }
+If (-not (Test-Path $EIcfg)) { $Missing += "ei.cfg" }
+If (-not (Test-Path $ConfigJson)) { $Missing += "WIMaster-Config.json" }
+If (-not (Test-Path $ExclusionsJson)) { $Missing += "WIMaster_Exclusions.json" }
+
 If ($Missing) {$Hinweis = "Es fehlen erforderliche Dateien: " + ($Missing -join ', ')}
 	
 # System pruefen
@@ -795,50 +838,64 @@ Copy-Item -Path "${LWISO}\Sources\*" -Destination "${LWNTFS}:\Sources" -exclude 
 Copy-Item -Path $EIcfg -Destination "${LWNTFS}:\Sources" -Force
 
 Ausgabe " ... WIMaster nach WIM-DATA"
-Copy-Item -Path $Batch -Destination "${LWNTFS}:"
 Copy-Item -Path $Autorun -Destination "${LWNTFS}:"
 Copy-Item -Path $MenuCmd -Destination "${LWNTFS}:"
-Copy-Item -Path $MenuPs1 -Destination "${LWNTFS}:"
+
+# Kopiere alle BAT-Dateien ins Hauptverzeichnis
+Copy-Item -Path $Batch -Destination "${LWNTFS}:"
+Copy-Item -Path $StartBat -Destination "${LWNTFS}:"
+Copy-Item -Path $StartUnattendedBat -Destination "${LWNTFS}:"
 Copy-Item -Path $StartMenuBat -Destination "${LWNTFS}:"
+Copy-Item -Path $SpeedCheckbat -Destination "${LWNTFS}:"
+Copy-Item -Path $ConfigManagerBat -Destination "${LWNTFS}:"
+Copy-Item -Path $EncryptPasswordBat -Destination "${LWNTFS}:"
+
+# Erstelle WIMaster-Verzeichnisstruktur
 New-Item -Path "${LWNTFS}:\WIMaster" -ItemType Directory | Out-Null
-Copy-Item -Path $Skript -Destination "${LWNTFS}:\WIMaster"
+New-Item -Path "${LWNTFS}:\WIMaster\ps1" -ItemType Directory | Out-Null
+New-Item -Path "${LWNTFS}:\WIMaster\docs" -ItemType Directory | Out-Null
+
+# Kopiere PS1-Dateien ins WIMaster\ps1
+Copy-Item -Path $Skript -Destination "${LWNTFS}:\WIMaster\ps1"
+Copy-Item -Path $SpeedCheckps1 -Destination "${LWNTFS}:\WIMaster\ps1"
+Copy-Item -Path $ConfigManager -Destination "${LWNTFS}:\WIMaster\ps1"
+Copy-Item -Path $EncryptPasswordPs1 -Destination "${LWNTFS}:\WIMaster\ps1"
+Copy-Item -Path $MenuPs1 -Destination "${LWNTFS}:\WIMaster\ps1"
+
+# Kopiere Setup-Dateien ins WIMaster-Verzeichnis
+Copy-Item -Path $SetupBat -Destination "${LWNTFS}:\WIMaster"
+Copy-Item -Path $SetupPs1 -Destination "${LWNTFS}:\WIMaster"
+
+# Kopiere Konfiguration und Ressourcen ins WIMaster-Verzeichnis
 Copy-Item -Path $ConfigJson -Destination "${LWNTFS}:\WIMaster"
 Copy-Item -Path $ExclusionsJson -Destination "${LWNTFS}:\WIMaster"
 Copy-Item -Path $Icon -Destination "${LWNTFS}:\WIMaster"
 Copy-Item -Path $ShadowExe -Destination "${LWNTFS}:\WIMaster"
-Copy-Item -Path $SpeedCheckps1 -Destination "${LWNTFS}:\WIMaster"
-Copy-Item -Path $SpeedCheckbat -Destination "${LWNTFS}:\WIMaster"
-Copy-Item -Path $ConfigManager -Destination "${LWNTFS}:\WIMaster"
-Copy-Item -Path $ConfigManagerBat -Destination "${LWNTFS}:\WIMaster"
-Copy-Item -Path $StartBat -Destination "${LWNTFS}:\WIMaster"
-Copy-Item -Path $StartUnattendedBat -Destination "${LWNTFS}:\WIMaster"
-Copy-Item -Path $EncryptPasswordPs1 -Destination "${LWNTFS}:\WIMaster"
-Copy-Item -Path $EncryptPasswordBat -Destination "${LWNTFS}:\WIMaster"
-Copy-Item -Path $SetupBat -Destination "${LWNTFS}:\WIMaster"
-Copy-Item -Path $SetupPs1 -Destination "${LWNTFS}:\WIMaster"
-Copy-Item -Path $PasswordReadmeTxt -Destination "${LWNTFS}:\WIMaster"
-Copy-Item -Path $PasswordReadmeRtf -Destination "${LWNTFS}:\WIMaster"
-Copy-Item -Path $PasswordReadmeMd -Destination "${LWNTFS}:\WIMaster"
+
+# Kopiere Dokumentation ins WIMaster\docs
+Copy-Item -Path $PasswordReadmeTxt -Destination "${LWNTFS}:\WIMaster\docs"
+Copy-Item -Path $PasswordReadmeRtf -Destination "${LWNTFS}:\WIMaster\docs"
+Copy-Item -Path $PasswordReadmeMd -Destination "${LWNTFS}:\WIMaster\docs"
 
 Ausgabe " ... Erweiterte Scripts nach WIM-DATA"
-New-Item -Path "${LWNTFS}:\Scripts" -ItemType Directory | Out-Null
-New-Item -Path "${LWNTFS}:\Scripts\config" -ItemType Directory | Out-Null
-New-Item -Path "${LWNTFS}:\Scripts\templates" -ItemType Directory | Out-Null
-New-Item -Path "${LWNTFS}:\Scripts\utils" -ItemType Directory | Out-Null
+New-Item -Path "${LWNTFS}:\WIMaster\Scripts" -ItemType Directory | Out-Null
+New-Item -Path "${LWNTFS}:\WIMaster\Scripts\config" -ItemType Directory | Out-Null
+New-Item -Path "${LWNTFS}:\WIMaster\Scripts\templates" -ItemType Directory | Out-Null
+New-Item -Path "${LWNTFS}:\WIMaster\Scripts\utils" -ItemType Directory | Out-Null
 
-Copy-Item -Path $SmbRestoreCmd -Destination "${LWNTFS}:\Scripts"
-Copy-Item -Path $NetworkToolsCmd -Destination "${LWNTFS}:\Scripts"
-Copy-Item -Path $DiskToolsCmd -Destination "${LWNTFS}:\Scripts"
-Copy-Item -Path $SystemInfoCmd -Destination "${LWNTFS}:\Scripts"
-Copy-Item -Path $DefaultSettingsTxt -Destination "${LWNTFS}:\Scripts\config"
-Copy-Item -Path $NetworkProfilesTxt -Destination "${LWNTFS}:\Scripts\config"
-Copy-Item -Path $LastRestoreTxt -Destination "${LWNTFS}:\Scripts\config"
-Copy-Item -Path $DiskpartMbrTxt -Destination "${LWNTFS}:\Scripts\templates"
-Copy-Item -Path $DiskpartUefiTxt -Destination "${LWNTFS}:\Scripts\templates"
-Copy-Item -Path $PostInstallCmd -Destination "${LWNTFS}:\Scripts\templates"
-Copy-Item -Path $SmbFunctionsCmd -Destination "${LWNTFS}:\Scripts\utils"
-Copy-Item -Path $NetworkFunctionsCmd -Destination "${LWNTFS}:\Scripts\utils"
-Copy-Item -Path $DiskFunctionsCmd -Destination "${LWNTFS}:\Scripts\utils"
+Copy-Item -Path $SmbRestoreCmd -Destination "${LWNTFS}:\WIMaster\Scripts"
+Copy-Item -Path $NetworkToolsCmd -Destination "${LWNTFS}:\WIMaster\Scripts"
+Copy-Item -Path $DiskToolsCmd -Destination "${LWNTFS}:\WIMaster\Scripts"
+Copy-Item -Path $SystemInfoCmd -Destination "${LWNTFS}:\WIMaster\Scripts"
+Copy-Item -Path $DefaultSettingsTxt -Destination "${LWNTFS}:\WIMaster\Scripts\config"
+Copy-Item -Path $NetworkProfilesTxt -Destination "${LWNTFS}:\WIMaster\Scripts\config"
+Copy-Item -Path $LastRestoreTxt -Destination "${LWNTFS}:\WIMaster\Scripts\config"
+Copy-Item -Path $DiskpartMbrTxt -Destination "${LWNTFS}:\WIMaster\Scripts\templates"
+Copy-Item -Path $DiskpartUefiTxt -Destination "${LWNTFS}:\WIMaster\Scripts\templates"
+Copy-Item -Path $PostInstallCmd -Destination "${LWNTFS}:\WIMaster\Scripts\templates"
+Copy-Item -Path $SmbFunctionsCmd -Destination "${LWNTFS}:\WIMaster\Scripts\utils"
+Copy-Item -Path $NetworkFunctionsCmd -Destination "${LWNTFS}:\WIMaster\Scripts\utils"
+Copy-Item -Path $DiskFunctionsCmd -Destination "${LWNTFS}:\WIMaster\Scripts\utils"
 
 attrib -R ${LWNTFS}:\*.* /S /D | Out-Null
 

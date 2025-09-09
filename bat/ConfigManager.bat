@@ -22,7 +22,7 @@ echo Starte Konfigurations-Manager...
 echo.
 
 REM PowerShell-Skript mit umgangener Execution Policy starten
-powershell.exe -ExecutionPolicy Bypass -File "%~dp0WIMaster-ConfigManager.ps1"
+powershell.exe -ExecutionPolicy Bypass -File "%~dp0WIMaster\ps1\WIMaster-ConfigManager.ps1"
 
 echo.
 pause

@@ -24,7 +24,7 @@ if %errorlevel% neq 0 (
 )
 
 REM Start the PowerShell GUI menu
-powershell -ExecutionPolicy Bypass -File "%SCRIPT_DIR%\WIMaster-Menu.ps1"
+powershell -ExecutionPolicy Bypass -File "%SCRIPT_DIR%\WIMaster\ps1\WIMaster-Menu.ps1"
 
 REM If we get here, the GUI was closed
 echo.

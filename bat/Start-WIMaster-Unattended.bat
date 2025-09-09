@@ -1,6 +1,6 @@
 @echo off
 REM WIMaster Unattended Starter Batch File
-REM Startet WIMaster.ps1 im unbeaufsichtigten Modus mit Administrator-Rechten
+REM Startet WIMaster\ps1\WIMaster.ps1 im unbeaufsichtigten Modus mit Administrator-Rechten
 
 echo Starting WIMaster in unattended mode...
 echo.
@@ -13,8 +13,8 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-REM WIMaster.ps1 im unbeaufsichtigten Modus starten
-powershell -ExecutionPolicy Bypass -File "%~dp0WIMaster.ps1" -Unattended
+REM WIMaster.ps1 im unbeaufsichtigten Modus starten (im WIMaster\ps1 Unterverzeichnis)
+powershell -ExecutionPolicy Bypass -File "%~dp0WIMaster\ps1\WIMaster.ps1" -Unattended
 
 REM Pause falls Fehler auftritt
 if %errorlevel% neq 0 (

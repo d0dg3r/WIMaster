@@ -1,6 +1,6 @@
 @echo off
 REM WIMaster Starter Batch File
-REM Startet WIMaster.ps1 mit Administrator-Rechten
+REM Startet WIMaster\ps1\WIMaster.ps1 mit Administrator-Rechten
 
 echo Starting WIMaster...
 echo.
@@ -13,8 +13,8 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-REM WIMaster.ps1 mit Administrator-Rechten starten
-powershell -ExecutionPolicy Bypass -File "%~dp0WIMaster.ps1"
+REM WIMaster.ps1 mit Administrator-Rechten starten (im WIMaster\ps1 Unterverzeichnis)
+powershell -ExecutionPolicy Bypass -File "%~dp0WIMaster\ps1\WIMaster.ps1"
 
 REM Pause falls Fehler auftritt
 if %errorlevel% neq 0 (

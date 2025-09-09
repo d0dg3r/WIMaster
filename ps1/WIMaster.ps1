@@ -72,14 +72,26 @@ if (-not (Test-Path $Source)) {
 $ScratchDir = Join-Path $Source "\WIMaster_Scratch"
 
 # Von WIMaster-Setup benötigte Dateien
-$ExclusionsJson = Join-Path $PSScriptRoot "\WIMaster_Exclusions.json"  # Ausschlussliste (JSON)
-$Icon = Join-Path $PSScriptRoot "\WIMaster_Ico.ico"         # Programm-Icon
-$eicfg = Join-Path $Source "\ei.cfg"                        # Windows Setup-Konfiguration
-$ShadowExe = Join-Path $PSScriptRoot "\vshadow.exe"          # Volume Shadow Copy Service
+# Pfaderkennung: Development vs USB-Stick
+$IsDevelopment = Test-Path (Join-Path (Split-Path $PSScriptRoot) "bat")
+If ($IsDevelopment) {
+    # Development-Umgebung (organisierte Struktur)
+    $ExclusionsJson = Join-Path (Split-Path $PSScriptRoot) "\config\WIMaster_Exclusions.json"
+    $ShadowExe = Join-Path (Split-Path $PSScriptRoot) "\tools\vshadow.exe"
+    $ConfigFile = if ($ConfigPath) { $ConfigPath } else { Join-Path (Split-Path $PSScriptRoot) "config\WIMaster-Config.json" }
+} Else {
+    # USB-Stick (WIMaster-Verzeichnis)
+    $ExclusionsJson = Join-Path (Split-Path $PSScriptRoot) "\WIMaster_Exclusions.json"
+    $ShadowExe = Join-Path (Split-Path $PSScriptRoot) "\vshadow.exe"
+    $ConfigFile = if ($ConfigPath) { $ConfigPath } else { Join-Path (Split-Path $PSScriptRoot) "WIMaster-Config.json" }
+}
+
+# Gemeinsame Pfade
+$Icon = Join-Path (Split-Path $PSScriptRoot) "\WIMaster_Ico.ico"         # Programm-Icon
+$eicfg = Join-Path (Split-Path $PSScriptRoot) "\Sources\ei.cfg"  # Windows Setup-Konfiguration (wird vom Setup kopiert)
 $Dism = Join-Path $env:windir "\system32\Dism.exe"          # Deployment Image Servicing and Management
 
-# Konfigurationsdatei-Pfad
-$ConfigFile = if ($ConfigPath) { $ConfigPath } else { Join-Path $PSScriptRoot "WIMaster-Config.json" }
+# ConfigFile wird oben in der Pfaderkennung definiert
 
 # Netzwerk-Pfad-Variablen (aus Konfiguration geladen)
 $Script:NetworkPath = ""           # UNC-Pfad fuer Netzwerk-Backup
@@ -291,23 +303,24 @@ Function ConvertFrom-EncryptedPassword {
 	[CmdletBinding()]
 	param(
 		[Parameter(Mandatory=$false)]
-		[SecureString]$EncryptedPassword
+		[string]$EncryptedPassword
 	)
 	
 	# Leere verschluesselte Passwoerter zurueckgeben
-	if ($null -eq $EncryptedPassword) {
-		return [SecureString]::new()
+	if ([string]::IsNullOrEmpty($EncryptedPassword)) {
+		return New-Object SecureString
 	}
 	
 	try {
-		# SecureString direkt zurückgeben
-		return $EncryptedPassword
+		# Verschluesseltes Passwort entschluesseln
+		$SecureString = ConvertTo-SecureString -String $EncryptedPassword -ErrorAction Stop
+		return $SecureString
 	} catch [System.Security.Cryptography.CryptographicException] {
 		Write-Error "Kryptografischer Fehler beim Entschluesseln: $($_.Exception.Message)"
-		return [SecureString]::new()
+		return New-Object SecureString
 	} catch {
 		Write-Error "Unbekannter Fehler beim Entschluesseln: $($_.Exception.Message)"
-		return [SecureString]::new()
+		return New-Object SecureString
 	}
 }
 
@@ -365,8 +378,8 @@ Function Import-Config {
 			# Netzwerk-Einstellungen laden
 			if ($Config.Network) {
 				$Script:EnableNetworkBackup = [bool]($Config.Network.EnableNetworkBackup -eq $true)
-				$Script:NetworkPath = [string]($Config.Network.NetworkPath ?? "")
-				$Script:NetworkUser = [string]($Config.Network.NetworkUser ?? "")
+				$Script:NetworkPath = if ($Config.Network.NetworkPath) { [string]$Config.Network.NetworkPath } else { "" }
+				$Script:NetworkUser = if ($Config.Network.NetworkUser) { [string]$Config.Network.NetworkUser } else { "" }
 				
 				# Passwort entschluesseln
 				$EncryptedPassword = $Config.Network.NetworkPassword
@@ -377,7 +390,7 @@ Function Import-Config {
 			if ($Config.Backup) {
 				$Script:Shutdown = [bool]($Config.Backup.DefaultShutdown -eq $true)
 				$Script:NoWindowsold = [bool]($Config.Backup.DefaultNoWindowsold -eq $true)
-				$Script:DefaultBackupPath = [string]($Config.Backup.DefaultBackupPath ?? "")
+				$Script:DefaultBackupPath = if ($Config.Backup.DefaultBackupPath) { [string]$Config.Backup.DefaultBackupPath } else { "" }
 			}
 			
 			# Erweiterte Einstellungen laden
@@ -664,7 +677,7 @@ Function GetAvailableDrives {
 			$TotalSpaceGB = [math]::Round($_.Size / 1GB, 1)
 			$Drives += [PSCustomObject]@{
 				Drive = $_.DeviceID
-				Label = $_.VolumeName ?? "(kein Name)"
+				Label = if ($_.VolumeName) { $_.VolumeName } else { "(kein Name)" }
 				FreeSpace = $FreeSpaceGB
 				TotalSpace = $TotalSpaceGB
 				Type = if ($_.DriveType -eq 2) { "Removable Drive" } else { "Local Drive" }
@@ -867,7 +880,7 @@ Function IniTempCreate {
 		$JsonData = Get-Content -Path $ExclusionsJson -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
 		
 		# StringBuilder für bessere Performance bei String-Operationen
-		$StringBuilder = [System.Text.StringBuilder]::new()
+		$StringBuilder = New-Object System.Text.StringBuilder
 		[void]$StringBuilder.AppendLine("[ExclusionList]")
 		
 		# Exclusion List hinzufügen
@@ -1485,7 +1498,7 @@ $Action = if (Test-Path $Wim) {
 }
 
 # DISM-Parameter als Array für bessere Lesbarkeit
-$DismArgs = [System.Collections.ArrayList]@()
+$DismArgs = New-Object System.Collections.ArrayList
 [void]$DismArgs.AddRange($Action.Split(' '))
 [void]$DismArgs.Add("/CaptureDir:$Script:ShadowPath\")
 [void]$DismArgs.Add("/Name:$ImageName")
@@ -1558,6 +1571,38 @@ Function ProcessCompletion {
 				$Sure = $false
 				Message
 			}
+		} else {
+			# Erfolgreiches Backup - Nacharbeiten
+			Fettdruck "`r`n`r`n  Nachbereitungen ...`r`n"
+			
+			# Stoppe Stoppuhr
+			$stopwatch.Stop()
+			$Dauer = "$($stopwatch.Elapsed.Hours):$(('{0:D2}' -f $stopwatch.Elapsed.Minutes)):$(('{0:D2}' -f $stopwatch.Elapsed.Seconds))"
+
+			if (-not ($Lost) -and ($Code -eq 0)) {
+				ShadowTempDelete ; Ausgabe "   Schattenkopie wieder entfernen"
+				if (Test-Path $FreshWim) {Rename-Item -Path $FreshWim -NewName (Split-Path -Leaf $Wim)}
+				Ausgabe "   Backupliste.txt schreiben"
+				& $Dism /Get-ImageInfo /ImageFile:$Wim /LogPath:$LogFile /LogLevel:$LogLevel > $Liste
+				$ImageIndex = (Get-WindowsImage -ImagePath $Wim | Sort-Object ImageIndex -Descending | Select-Object -First 1).ImageIndex
+				$ImageSize = ([math]::Round((Get-WindowsImage -ImagePath $Wim -Index $ImageIndex).ImageSize / 1GB, 1))
+				$ImageDirs = "{0:N0}" -f (Get-WindowsImage -ImagePath $Wim -Index $ImageIndex).DirectoryCount
+				$ImageFiles = "{0:N0}" -f (Get-WindowsImage -ImagePath $Wim -Index $ImageIndex).FileCount
+				Fettdruck "`r`n  Zusammenfassung:`r`n"
+				Ausgabe "   Die Sicherung enthaelt $ImageFiles Dateien und $ImageDirs Ordner, zusammen $ImageSize GByte."
+				Ausgabe "   Dauer der Sicherung: $Dauer (mit Verify und Integritaetspruefung)."
+				Ausgabe "`r`n   Gesichert wurde die Sicherung als Image Nr. $ImageIndex in der Datei`r`n   $Wim."
+				Ausgabe "`r`n   Liste aller Images in der Datei ${Wim}:`r`n   $Liste"
+			}
+			Fettdruck "`r`n Fertig!"
+
+			# Falls Shutdown gewuenscht: Countdown starten
+			if ($Script:Shutdown) {shutdown /s /t 60}
+			
+			if (-not $Unattended) {
+				# "Fertig"-Knopf
+				$JobReadyButton.Enabled = $true
+			}
 		}
 	} catch {
 		Write-WIMasterLog -Message "Fehler in ProcessCompletion: $($_.Exception.Message)" -Level 'Error'
@@ -1607,41 +1652,6 @@ Function Invoke-Cleanup {
 		
 	} catch {
 		Write-WIMasterLog -Message "Fehler während Cleanup: $($_.Exception.Message)" -Level 'Warning'
-	}
-}
-	
-		# Cleanup erfolgt in Invoke-Cleanup
-
-	# Stoppe Stoppuhr
-	$stopwatch.Stop()
-	$Dauer = "$($stopwatch.Elapsed.Hours):$(('{0:D2}' -f $stopwatch.Elapsed.Minutes)):$(('{0:D2}' -f $stopwatch.Elapsed.Seconds))"
-
-	If (-not ($Lost) -and ($Code -eq 0)) {
-		ShadowTempDelete ; Ausgabe "   Schattenkopie wieder entfernen"
-		If (Test-Path $FreshWim) {Rename-Item -Path $FreshWim -NewName (Split-Path -Leaf $Wim)}
-		Ausgabe "   Backupliste.txt schreiben"
-		& $Dism /Get-ImageInfo /ImageFile:$Wim /LogPath:$LogFile /LogLevel:$LogLevel > $Liste
-		$ImageIndex = (Get-WindowsImage -ImagePath $Wim | Sort-Object ImageIndex -Descending | Select-Object -First 1).ImageIndex
-		$ImageSize = ([math]::Round((Get-WindowsImage -ImagePath $Wim -Index $ImageIndex).ImageSize / 1GB, 1))
-		$ImageDirs = "{0:N0}" -f (Get-WindowsImage -ImagePath $Wim -Index $ImageIndex).DirectoryCount
-		$ImageFiles = "{0:N0}" -f (Get-WindowsImage -ImagePath $Wim -Index $ImageIndex).FileCount
-		Fettdruck "`r`n  Zusammenfassung:`r`n"
-		Ausgabe "   Die Sicherung enthaelt $ImageFiles Dateien und $ImageDirs Ordner, zusammen $ImageSize GByte."
-		Ausgabe "   Dauer der Sicherung: $Dauer (mit Verify und Integritaetspruefung)."
-		Ausgabe "`r`n   Gesichert wurde die Sicherung als Image Nr. $ImageIndex in der Datei`r`n   $Wim."
-		Ausgabe "`r`n   Liste aller Images in der Datei ${Wim}:`r`n   $Liste"
-	}
-	Fettdruck "`r`n Fertig!"
-
-		# Falls Shutdown gewuenscht: Countdown starten
-		if ($Script:Shutdown) {shutdown /s /t 60}
-		
-		if (-not $Unattended) {
-			# "Fertig"-Knopf
-			$JobReadyButton.Enabled = $true
-		}
-	} catch {
-		Write-WIMasterLog -Message "Fehler in erfolgreicher Backup-Abschluss: $($_.Exception.Message)" -Level 'Warning'
 	}
 }
 
