@@ -11,6 +11,8 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 
 # Get the directory where this script is located
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+# Auf USB-Stick zeigt $ScriptDir auf U:\WIMaster\ps1
+$WIMasterDir = Split-Path -Parent $ScriptDir
 
 # Windows Forms und Drawing Assemblies laden
 Add-Type -AssemblyName System.Windows.Forms
@@ -132,7 +134,7 @@ $Button1.Size = New-Object System.Drawing.Size($ButtonWidth, $ButtonHeight)
 $Button1.Font = New-Object System.Drawing.Font($FontName, $FontButtonSize)
 $Button1.Text = "1. SMB Image Restore"
 $Button1.Add_Click({
-    $ScriptPath = Join-Path $ScriptDir "Scripts\SMB-Restore-GUI.ps1"
+    $ScriptPath = Join-Path $WIMasterDir "Scripts\SMB-Restore-GUI.ps1"
     Start-Script -ScriptPath $ScriptPath -ScriptName "SMB Image Restore"
 })
 
@@ -143,7 +145,7 @@ $Button2.Size = New-Object System.Drawing.Size($ButtonWidth, $ButtonHeight)
 $Button2.Font = New-Object System.Drawing.Font($FontName, $FontButtonSize)
 $Button2.Text = "2. Network Tools"
 $Button2.Add_Click({
-    $ScriptPath = Join-Path $ScriptDir "Scripts\Network-Tools-GUI.ps1"
+    $ScriptPath = Join-Path $WIMasterDir "Scripts\Network-Tools-GUI.ps1"
     Start-Script -ScriptPath $ScriptPath -ScriptName "Network Tools"
 })
 
@@ -154,7 +156,7 @@ $Button3.Size = New-Object System.Drawing.Size($ButtonWidth, $ButtonHeight)
 $Button3.Font = New-Object System.Drawing.Font($FontName, $FontButtonSize)
 $Button3.Text = "3. Disk Tools"
 $Button3.Add_Click({
-    $ScriptPath = Join-Path $ScriptDir "Scripts\Disk-Tools-GUI.ps1"
+    $ScriptPath = Join-Path $WIMasterDir "Scripts\Disk-Tools-GUI.ps1"
     Start-Script -ScriptPath $ScriptPath -ScriptName "Disk Tools"
 })
 
@@ -165,7 +167,7 @@ $Button4.Size = New-Object System.Drawing.Size($ButtonWidth, $ButtonHeight)
 $Button4.Font = New-Object System.Drawing.Font($FontName, $FontButtonSize)
 $Button4.Text = "4. System Information"
 $Button4.Add_Click({
-    $ScriptPath = Join-Path $ScriptDir "Scripts\System-Info-GUI.ps1"
+    $ScriptPath = Join-Path $WIMasterDir "Scripts\System-Info-GUI.ps1"
     Start-Script -ScriptPath $ScriptPath -ScriptName "System Information"
 })
 

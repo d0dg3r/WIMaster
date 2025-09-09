@@ -28,10 +28,10 @@ set /p choice="Select option [1-7]: "
 
 if "%choice%"=="1" (
     echo Starting SMB Image Restore...
-    if exist "%SCRIPT_DIR%\Scripts\smb-restore.cmd" (
-        call "%SCRIPT_DIR%\Scripts\smb-restore.cmd"
+    if exist "%SCRIPT_DIR%\WIMaster\Scripts\smb-restore.cmd" (
+        call "%SCRIPT_DIR%\WIMaster\Scripts\smb-restore.cmd"
     ) else (
-        echo Error: %SCRIPT_DIR%\Scripts\smb-restore.cmd not found!
+        echo Error: %SCRIPT_DIR%\WIMaster\Scripts\smb-restore.cmd not found!
         pause
     )
     goto MAIN_MENU
@@ -39,10 +39,10 @@ if "%choice%"=="1" (
 
 if "%choice%"=="2" (
     echo Starting Network Tools...
-    if exist "%SCRIPT_DIR%\Scripts\network-tools.cmd" (
-        call "%SCRIPT_DIR%\Scripts\network-tools.cmd"
+    if exist "%SCRIPT_DIR%\WIMaster\Scripts\network-tools.cmd" (
+        call "%SCRIPT_DIR%\WIMaster\Scripts\network-tools.cmd"
     ) else (
-        echo Error: %SCRIPT_DIR%\Scripts\network-tools.cmd not found!
+        echo Error: %SCRIPT_DIR%\WIMaster\Scripts\network-tools.cmd not found!
         pause
     )
     goto MAIN_MENU
@@ -50,10 +50,10 @@ if "%choice%"=="2" (
 
 if "%choice%"=="3" (
     echo Starting Disk Tools...
-    if exist "%SCRIPT_DIR%\Scripts\disk-tools.cmd" (
-        call "%SCRIPT_DIR%\Scripts\disk-tools.cmd"
+    if exist "%SCRIPT_DIR%\WIMaster\Scripts\disk-tools.cmd" (
+        call "%SCRIPT_DIR%\WIMaster\Scripts\disk-tools.cmd"
     ) else (
-        echo Error: %SCRIPT_DIR%\Scripts\disk-tools.cmd not found!
+        echo Error: %SCRIPT_DIR%\WIMaster\Scripts\disk-tools.cmd not found!
         pause
     )
     goto MAIN_MENU
@@ -61,10 +61,10 @@ if "%choice%"=="3" (
 
 if "%choice%"=="4" (
     echo Starting System Information...
-    if exist "%SCRIPT_DIR%\Scripts\system-info.cmd" (
-        call "%SCRIPT_DIR%\Scripts\system-info.cmd"
+    if exist "%SCRIPT_DIR%\WIMaster\Scripts\system-info.cmd" (
+        call "%SCRIPT_DIR%\WIMaster\Scripts\system-info.cmd"
     ) else (
-        echo Error: %SCRIPT_DIR%\Scripts\system-info.cmd not found!
+        echo Error: %SCRIPT_DIR%\WIMaster\Scripts\system-info.cmd not found!
         pause
     )
     goto MAIN_MENU

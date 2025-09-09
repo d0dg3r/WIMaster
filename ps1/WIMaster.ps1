@@ -88,7 +88,15 @@ If ($IsDevelopment) {
 
 # Gemeinsame Pfade
 $Icon = Join-Path (Split-Path $PSScriptRoot) "\WIMaster_Ico.ico"         # Programm-Icon
-$eicfg = Join-Path (Split-Path $PSScriptRoot) "\Sources\ei.cfg"  # Windows Setup-Konfiguration (wird vom Setup kopiert)
+# ei.cfg auf USB-Stick suchen: bevorzugt U:\Sources\ei.cfg, Fallback: U:\WIMaster\Sources\ei.cfg
+$WIMasterDir = (Split-Path $PSScriptRoot)
+$UsbRootDir = (Split-Path $WIMasterDir)
+$EICfgCandidates = @(
+    (Join-Path $UsbRootDir "Sources\ei.cfg"),
+    (Join-Path $WIMasterDir "Sources\ei.cfg")
+)
+$eicfg = ($EICfgCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1)
+if (-not $eicfg) { $eicfg = $EICfgCandidates[0] }
 $Dism = Join-Path $env:windir "\system32\Dism.exe"          # Deployment Image Servicing and Management
 
 # ConfigFile wird oben in der Pfaderkennung definiert

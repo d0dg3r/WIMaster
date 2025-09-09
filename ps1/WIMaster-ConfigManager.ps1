@@ -30,7 +30,7 @@ foreach ($arg in $args) {
     }
 }
 
-$ConfigFile = Join-Path $PSScriptRoot "WIMaster-Config.json"
+$ConfigFile = Join-Path (Split-Path $PSScriptRoot) "WIMaster-Config.json"
 
 # Funktion zum Lesen der Konfiguration aus der JSON-Datei
 function Read-Config {
